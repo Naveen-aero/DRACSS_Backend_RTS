@@ -18,11 +18,13 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.urls import path, include
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("backend_app.accounts.urls")),  # exposes /api/accounts/
     path("api/", include("backend_app.drone_registration.urls")),
+    path("api/", include("backend_app.orderform.urls")),
 ]
 
 if settings.DEBUG:

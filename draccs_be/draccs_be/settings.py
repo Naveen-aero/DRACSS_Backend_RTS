@@ -40,7 +40,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'backend_app.accounts', 
     'backend_app.drone_registration',
-    
+    'backend_app.orderform.apps.OrderformConfig', 
 ]
 
 MIDDLEWARE = [
