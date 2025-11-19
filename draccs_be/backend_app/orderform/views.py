@@ -1,57 +1,42 @@
-# draccs_be/backend_app/orderform/views.py
-
-from rest_framework import generics
-from .models import ChecklistItem, Order, OrderItem
-from .serializers import ChecklistItemSerializer, OrderSerializer, OrderItemSerializer
+from rest_framework import viewsets, permissions, filters
+from .models import ChecklistItem, Order
+from .serializers import ChecklistItemSerializer, OrderSerializer
 
 
-# -------- TEMPLATE ENDPOINT (READ-ONLY) --------
-class ChecklistItemListView(generics.ListAPIView):
+class ChecklistItemViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    GET /api/checklist-items/
-    Returns the standard Bhumi A10E checklist template.
+    READ-ONLY master template.
+    /api/checklist-items/ -> list
+    /api/checklist-items/<id>/ -> detail
+    No add/edit/delete allowed here.
     """
     queryset = ChecklistItem.objects.all().order_by("sort_order")
     serializer_class = ChecklistItemSerializer
+    permission_classes = [permissions.AllowAny]
+
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["description", "drone_model", "category"]
+    ordering_fields = ["sort_order", "drone_model", "category"]
+    ordering = ["sort_order"]
 
 
-# -------- ORDERS (WHERE MODIFIED CHECKLIST IS STORED) --------
-class OrderListCreateView(generics.ListCreateAPIView):
+class OrderViewSet(viewsets.ModelViewSet):
     """
-    GET /api/orders/    -> list all orders
-    POST /api/orders/   -> create new order
-                          If 'items' missing, auto-copy from ChecklistItem.
+    Per-order editable checklist.
+
+    - On create: if items not provided, pull from ChecklistItem and create OrderItem rows.
+    - On update: items array is fully editable (add/remove/edit rows).
     """
-    queryset = Order.objects.all().order_by("-created_at")
+    queryset = Order.objects.all().order_by("-created_at").prefetch_related("items")
     serializer_class = OrderSerializer
+    permission_classes = [permissions.AllowAny]  # tighten later if needed
 
-
-class OrderDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    GET /api/orders/<id>/    -> order + its items
-    PUT/PATCH /api/orders/<id>/ -> update header and (optionally) items
-    DELETE /api/orders/<id>/ -> delete order and its items
-    """
-    queryset = Order.objects.all()
-    serializer_class = OrderSerializer
-
-
-# -------- INDIVIDUAL ORDER ITEMS (for add/delete per-line) --------
-class OrderItemCreateView(generics.CreateAPIView):
-    """
-    POST /api/order-items/
-    Body should include: order, description, quantity_ordered, ...
-    Used to ADD new line items (extra accessories, etc.).
-    """
-    queryset = OrderItem.objects.all()
-    serializer_class = OrderItemSerializer
-
-
-class OrderItemDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    GET /api/order-items/<id>/
-    PATCH/PUT /api/order-items/<id>/  -> edit one line (change qty, tick, remarks)
-    DELETE /api/order-items/<id>/     -> delete one line from order.
-    """
-    queryset = OrderItem.objects.all()
-    serializer_class = OrderItemSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = [
+        "order_number",
+        "customer_name",
+        "drone_model",
+        "status",
+    ]
+    ordering_fields = ["created_at", "order_date", "order_number"]
+    ordering = ["-created_at"]

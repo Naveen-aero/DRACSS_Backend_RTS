@@ -2,6 +2,11 @@ from django.db import models
 from django.utils import timezone
 
 
+def today_local():
+    # Returns local date (no time part), DRF-friendly
+    return timezone.localdate()
+
+
 class ChecklistItem(models.Model):
     CATEGORY_CHOICES = [
         ("STANDARD_KIT", "Standard Kit"),
@@ -13,26 +18,14 @@ class ChecklistItem(models.Model):
         ("RPC_PROGRAM", "RPC Program"),
     ]
 
-    # This is the drone model this checklist template belongs to
     drone_model = models.CharField(max_length=100, default="Bhumi A10E")
-
-    # This will drive the "Description" column in UI via get_category_display()
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
-
-    # This will be shown under "BhumiA10E Drone" column (item name)
     description = models.CharField(max_length=255)
-
-    # This is the "Nos" column value
     default_quantity = models.PositiveIntegerField(default=1)
-
-    # For template: whether this line is included by default in the standard checklist
     is_mandatory = models.BooleanField(default=True)
-
-    # For ordering rows in the table
     sort_order = models.PositiveIntegerField(default=0)
 
     def __str__(self):
-        # Show human readable category for clarity
         return f"{self.drone_model} - {self.get_category_display()} - {self.description}"
 
 
@@ -46,7 +39,9 @@ class Order(models.Model):
     ]
 
     order_number = models.CharField(
-        max_length=20, unique=True, editable=False
+        max_length=20,
+        unique=True,
+        editable=False,
     )
 
     customer_name = models.CharField(max_length=255)
@@ -57,9 +52,11 @@ class Order(models.Model):
     shipping_address = models.TextField(blank=True, null=True)
 
     drone_model = models.CharField(max_length=100, default="Bhumi A10E")
-    order_date = models.DateField(default=timezone.now)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="DRAFT")
 
+    # ✅ Fixed: use a pure date, not datetime
+    order_date = models.DateField(default=today_local)
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="DRAFT")
     remarks = models.TextField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -85,7 +82,6 @@ class Order(models.Model):
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
 
-    # Links back to the template row (optional)
     checklist_item = models.ForeignKey(
         ChecklistItem,
         related_name="order_items",
@@ -94,18 +90,11 @@ class OrderItem(models.Model):
         blank=True,
     )
 
-    # Snapshot of the item name at time of order
     description = models.CharField(max_length=255)
-
     quantity_ordered = models.PositiveIntegerField(default=1)
     quantity_delivered = models.PositiveIntegerField(default=0)
-
-    # This is the runtime "Checklist" tick per order
     is_checked = models.BooleanField(default=False)
-
-    # True if this row came from the standard template, False if added manually
     is_from_template = models.BooleanField(default=True)
-
     remarks = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
