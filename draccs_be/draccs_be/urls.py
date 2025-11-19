@@ -23,8 +23,10 @@ from django.urls import path, include
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("backend_app.accounts.urls")),  # exposes /api/accounts/
-    path("api/", include("backend_app.drone_registration.urls")),
+    path('api/', include('backend_app.drone_registration.urls')),
     path("api/", include("backend_app.orderform.urls")),
+    path("", include("backend_app.orderform.urls")),
+
 ]
 
 if settings.DEBUG:

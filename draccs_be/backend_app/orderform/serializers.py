@@ -2,36 +2,59 @@ from rest_framework import serializers
 from .models import ChecklistItem, Order, OrderItem
 
 
+# ========= TEMPLATE CHECKLIST SERIALIZER (for /api/checklist-items/) =========
 class ChecklistItemSerializer(serializers.ModelSerializer):
-    # UI "Description" column: section name (Standard Kit, Payload, ...)
+    # UI "Description" column (section name)
     description = serializers.SerializerMethodField()
 
-    # UI "BhumiA10E Drone" column: actual item name
-    bhumi_a10e_drone = serializers.CharField(source="description")
+    # UI "BhumiA10E Drone" column (item name)
+    bhumi_a10e_drone = serializers.SerializerMethodField()
 
-    # UI "Nos" column: quantity
+    # UI "Nos" column
     nos = serializers.IntegerField(source="default_quantity")
 
-    # UI "Checklist" column: tick
+    # UI "Checklist" column
     checklist = serializers.BooleanField(source="is_mandatory")
 
     class Meta:
         model = ChecklistItem
         fields = [
             "id",
-            "description",        # ex: "Standard Kit"
-            "bhumi_a10e_drone",   # ex: "Bhumi A10E Drone"
-            "nos",                # ex: 1
-            "checklist",          # ex: true
-            "sort_order",         # ex: 1
+            "description",        # e.g. "Standard Kit"
+            "bhumi_a10e_drone",   # e.g. "Drone", "Propeller Set (1 CW; 1 CCW)"
+            "nos",                # e.g. 1
+            "checklist",          # e.g. true
+            "sort_order",         # ordering in table
         ]
 
     def get_description(self, obj):
-        # Converts "STANDARD_KIT" -> "Standard Kit", "PAYLOAD" -> "Payload", etc.
+        """
+        Section name for the left column.
+
+        Special rule:
+        - The row 'Bhumi A10E Drone' (category 'DRONE') should also show under 'Standard Kit'.
+        """
+        if obj.category == "DRONE" and obj.description == "Bhumi A10E Drone":
+            return "Standard Kit"
+        # For TRAINING / SOFTWARE / etc, use their display names
         return obj.get_category_display()
 
+    def get_bhumi_a10e_drone(self, obj):
+        """
+        Item name for the second column.
+
+        Special rule:
+        - For the main drone row, show just 'Drone'.
+        """
+        if obj.category == "DRONE" and obj.description == "Bhumi A10E Drone":
+            return "Drone"
+        return obj.description
+
+
+# ========= ORDER + ORDER ITEMS (WHERE MODIFIED DATA IS STORED) =========
 
 class OrderItemSerializer(serializers.ModelSerializer):
+    # Optional: include template info (section, default nos, etc.) for reference
     checklist_item_detail = ChecklistItemSerializer(
         source="checklist_item", read_only=True
     )
@@ -40,19 +63,20 @@ class OrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = [
             "id",
-            "checklist_item",
-            "checklist_item_detail",
-            "description",
+            "checklist_item",        # FK to template (nullable)
+            "checklist_item_detail", # read-only template data
+            "description",           # snapshot name (can be edited)
             "quantity_ordered",
             "quantity_delivered",
-            "is_checked",
-            "is_from_template",
+            "is_checked",            # tick per order
+            "is_from_template",      # True if cloned from template
             "remarks",
         ]
 
 
 class OrderSerializer(serializers.ModelSerializer):
-    items = OrderItemSerializer(many=True)
+    # Nested list of order items
+    items = OrderItemSerializer(many=True, required=False)
 
     class Meta:
         model = Order
@@ -75,19 +99,58 @@ class OrderSerializer(serializers.ModelSerializer):
         read_only_fields = ["order_number", "created_at", "updated_at"]
 
     def create(self, validated_data):
-        items_data = validated_data.pop("items", [])
+        """
+        When creating a new order:
+
+        - If 'items' is provided in payload: use those directly.
+        - If 'items' is NOT provided: auto-copy all ChecklistItem rows for that drone_model
+          into OrderItem table. This becomes the editable checklist instance.
+        """
+        items_data = validated_data.pop("items", None)
+
+        # Create the order first
         order = Order.objects.create(**validated_data)
-        for item in items_data:
-            OrderItem.objects.create(order=order, **item)
+
+        if items_data:
+            # Frontend sent custom items (advanced usage)
+            for item in items_data:
+                OrderItem.objects.create(order=order, **item)
+        else:
+            # AUTO-COPY from template for this drone model
+            drone_model = order.drone_model or "Bhumi A10E"
+            template_items = ChecklistItem.objects.filter(
+                drone_model=drone_model
+            ).order_by("sort_order")
+
+            for tmpl in template_items:
+                OrderItem.objects.create(
+                    order=order,
+                    checklist_item=tmpl,
+                    description=tmpl.description,             # snapshot name at order time
+                    quantity_ordered=tmpl.default_quantity,   # start from default quantity
+                    quantity_delivered=0,
+                    is_checked=False,                         # not yet checked
+                    is_from_template=True,
+                    remarks="",
+                )
+
         return order
 
     def update(self, instance, validated_data):
+        """
+        Update order header + optionally replace items.
+
+        - If 'items' is included in payload: we clear existing items and recreate.
+          (You can later change this to smarter diff logic if needed.)
+        """
         items_data = validated_data.pop("items", None)
 
+        # Update order fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
+        # If items provided, replace them
         if items_data is not None:
             instance.items.all().delete()
             for item in items_data:
