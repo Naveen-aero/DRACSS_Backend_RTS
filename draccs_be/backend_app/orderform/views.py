@@ -1,42 +1,51 @@
-from rest_framework import viewsets, permissions, filters
-from .models import ChecklistItem, Order
-from .serializers import ChecklistItemSerializer, OrderSerializer
+# backend_app/orderform/views.py
+
+from rest_framework import viewsets
+from .models import (
+    ChecklistItem,
+    Order,
+    OrderDeliveryInfo,
+)
+from .serializers import (
+    ChecklistItemSerializer,
+    OrderSerializer,
+    OrderDeliveryInfoSerializer,
+)
 
 
-class ChecklistItemViewSet(viewsets.ReadOnlyModelViewSet):
+class ChecklistItemViewSet(viewsets.ModelViewSet):
     """
-    READ-ONLY master template.
-    /api/checklist-items/ -> list
-    /api/checklist-items/<id>/ -> detail
-    No add/edit/delete allowed here.
+    /api/checklist-items/
+    /api/checklist-items/<id>/
     """
     queryset = ChecklistItem.objects.all().order_by("sort_order")
     serializer_class = ChecklistItemSerializer
-    permission_classes = [permissions.AllowAny]
-
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["description", "drone_model", "category"]
-    ordering_fields = ["sort_order", "drone_model", "category"]
-    ordering = ["sort_order"]
 
 
 class OrderViewSet(viewsets.ModelViewSet):
     """
-    Per-order editable checklist.
-
-    - On create: if items not provided, pull from ChecklistItem and create OrderItem rows.
-    - On update: items array is fully editable (add/remove/edit rows).
+    /api/orders/
+    /api/orders/<id>/
     """
-    queryset = Order.objects.all().order_by("-created_at").prefetch_related("items")
+    queryset = (
+        Order.objects
+        .all()
+        .select_related("delivery_info")  # 1:1 OrderDeliveryInfo
+        .prefetch_related("items")        # related OrderItem rows (nested in serializer)
+        .order_by("-id")
+    )
     serializer_class = OrderSerializer
-    permission_classes = [permissions.AllowAny]  # tighten later if needed
 
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = [
-        "order_number",
-        "customer_name",
-        "drone_model",
-        "status",
-    ]
-    ordering_fields = ["created_at", "order_date", "order_number"]
-    ordering = ["-created_at"]
+
+class OrderDeliveryInfoViewSet(viewsets.ModelViewSet):
+    """
+    /api/order-delivery-info/
+    /api/order-delivery-info/<order_id>/
+
+    Use this to:
+      - Upload manufacturer/testing attachments
+      - Set UIN registration number
+      - Toggle ready_for_delivery flag
+    """
+    queryset = OrderDeliveryInfo.objects.select_related("order").all()
+    serializer_class = OrderDeliveryInfoSerializer

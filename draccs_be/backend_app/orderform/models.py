@@ -1,3 +1,5 @@
+# orderform/models.py
+
 from django.db import models
 from django.utils import timezone
 
@@ -53,7 +55,7 @@ class Order(models.Model):
 
     drone_model = models.CharField(max_length=100, default="Bhumi A10E")
 
-    # ✅ Fixed: use a pure date, not datetime
+    #  Fixed: use a pure date, not datetime
     order_date = models.DateField(default=today_local)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="DRAFT")
@@ -99,3 +101,69 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.order.order_number} - {self.description}"
+
+
+# ================== NEW CODE STARTS HERE ==================
+
+def manufacturer_upload_to(instance, filename):
+    """
+    File path for manufacturer attachments, grouped by order_number.
+    Example: orders/ORD_00004/manufacturer/<file>
+    """
+    return f"orders/{instance.order.order_number}/manufacturer/{filename}"
+
+
+def testing_upload_to(instance, filename):
+    """
+    File path for testing attachments, grouped by order_number.
+    Example: orders/ORD_00004/testing/<file>
+    """
+    return f"orders/{instance.order.order_number}/testing/{filename}"
+
+
+class OrderDeliveryInfo(models.Model):
+    """
+    Extra per-order information:
+
+    - Manufacturer attachments
+    - Testing attachments
+    - UIN registration number
+    - Ready for delivery flag
+
+    This is linked 1:1 with an Order via OneToOneField.
+    """
+
+    # 🔗 This is how we interlink with the Order table
+    # primary_key=True means:
+    #   - order_id is the PK of this table
+    #   - order_id == Order.id (1:1 relationship)
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="delivery_info",   # access via order.delivery_info
+        primary_key=True,
+    )
+
+    manufacturer_attachment = models.FileField(
+        upload_to=manufacturer_upload_to,
+        blank=True,
+        null=True,
+    )
+
+    testing_attachment = models.FileField(
+        upload_to=testing_upload_to,
+        blank=True,
+        null=True,
+    )
+
+    uin_registration_number = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+    )
+
+    # This is your "Ready for delivery" flag
+    ready_for_delivery = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Delivery info for {self.order.order_number}"
