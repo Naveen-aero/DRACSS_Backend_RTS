@@ -1,7 +1,5 @@
 from rest_framework import serializers
 from .models import ChecklistItem, Order, OrderItem, OrderDeliveryInfo
-#                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-#                            IMPORTANT: import OrderDeliveryInfo
 
 
 class ChecklistItemSerializer(serializers.ModelSerializer):
@@ -46,7 +44,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
         ]
 
 
-# ============ NEW: OrderDeliveryInfoSerializer ============
+# ============ OrderDeliveryInfoSerializer (UPDATED) ============
 
 class OrderDeliveryInfoSerializer(serializers.ModelSerializer):
     """
@@ -58,26 +56,39 @@ class OrderDeliveryInfoSerializer(serializers.ModelSerializer):
     linked 1:1 with an Order.
     """
 
+    # 🔑 Make "order" writable as a PK reference to Order
+    order = serializers.PrimaryKeyRelatedField(
+        queryset=Order.objects.all(),
+        help_text="ID of the Order this delivery info belongs to",
+    )
+
+    # (Optional but helpful) show the order_number in responses
+    order_number = serializers.CharField(
+        source="order.order_number",
+        read_only=True,
+    )
+
     class Meta:
         model = OrderDeliveryInfo
         fields = [
-            "order",                    # order id (PK, same as Order.id)
+            "order",                    # you POST/PATCH this with the Order.id
+            "order_number",             # read-only helper
             "manufacturer_attachment",
             "testing_attachment",
             "uin_registration_number",
             "ready_for_delivery",
         ]
-        # Usually we don’t let frontend change 'order' from here
-        read_only_fields = ["order"]
+        # ⛔ DO NOT mark 'order' as read-only here, we need it writable
+        # read_only_fields = ["order"]  # <-- removed
 
 
-# ================== EXISTING OrderSerializer ==================
+# ================== OrderSerializer ==================
 
 class OrderSerializer(serializers.ModelSerializer):
     # Editable per-order checklist
     items = OrderItemSerializer(many=True, required=False)
 
-    # NEW: nested read-only delivery info block
+    # Nested read-only delivery info block (filled by OrderDeliveryInfo)
     delivery_info = OrderDeliveryInfoSerializer(read_only=True)
 
     class Meta:
@@ -97,7 +108,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "items",          # existing
-            "delivery_info",  # NEW field
+            "delivery_info",  # includes order, order_number, attachments, UIN, flag
         ]
         read_only_fields = ["order_number", "created_at", "updated_at"]
 
