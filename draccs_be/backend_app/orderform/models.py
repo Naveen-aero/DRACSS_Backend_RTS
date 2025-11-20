@@ -1,4 +1,4 @@
-# orderform/models.py
+# backend_app/orderform/models.py
 
 from django.db import models
 from django.utils import timezone
@@ -7,6 +7,35 @@ from django.utils import timezone
 def today_local():
     # Returns local date (no time part), DRF-friendly
     return timezone.localdate()
+
+
+# ---------- LEGACY HELPERS FOR OLD MIGRATIONS (0005) ----------
+
+def manufacturer_upload_to(instance, filename):
+    """
+    OLD helper used in migration 0005_orderdeliveryinfo.
+    Even though we no longer use this in the current models,
+    the migration still imports it, so it MUST exist.
+    """
+    try:
+        order_number = instance.order.order_number
+    except AttributeError:
+        order_number = "UNKNOWN"
+    return f"orders/{order_number}/manufacturer/{filename}"
+
+
+def testing_upload_to(instance, filename):
+    """
+    OLD helper used in migration 0005_orderdeliveryinfo.
+    """
+    try:
+        order_number = instance.order.order_number
+    except AttributeError:
+        order_number = "UNKNOWN"
+    return f"orders/{order_number}/testing/{filename}"
+
+
+# --------------------------------------------------------------
 
 
 class ChecklistItem(models.Model):
@@ -55,7 +84,7 @@ class Order(models.Model):
 
     drone_model = models.CharField(max_length=100, default="Bhumi A10E")
 
-    #  Fixed: use a pure date, not datetime
+    # Fixed: use a pure date, not datetime
     order_date = models.DateField(default=today_local)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="DRAFT")
@@ -103,57 +132,25 @@ class OrderItem(models.Model):
         return f"{self.order.order_number} - {self.description}"
 
 
-# ================== NEW CODE STARTS HERE ==================
-
-def manufacturer_upload_to(instance, filename):
-    """
-    File path for manufacturer attachments, grouped by order_number.
-    Example: orders/ORD_00004/manufacturer/<file>
-    """
-    return f"orders/{instance.order.order_number}/manufacturer/{filename}"
-
-
-def testing_upload_to(instance, filename):
-    """
-    File path for testing attachments, grouped by order_number.
-    Example: orders/ORD_00004/testing/<file>
-    """
-    return f"orders/{instance.order.order_number}/testing/{filename}"
+# ================== NEW / CHANGED CODE STARTS HERE ==================
 
 
 class OrderDeliveryInfo(models.Model):
     """
     Extra per-order information:
 
-    - Manufacturer attachments
-    - Testing attachments
     - UIN registration number
     - Ready for delivery flag
 
-    This is linked 1:1 with an Order via OneToOneField.
+    Attachments (manufacturer/testing) are stored in a separate table:
+    OrderDeliveryAttachment (many rows per order).
     """
 
-    # 🔗 This is how we interlink with the Order table
-    # primary_key=True means:
-    #   - order_id is the PK of this table
-    #   - order_id == Order.id (1:1 relationship)
     order = models.OneToOneField(
         Order,
         on_delete=models.CASCADE,
         related_name="delivery_info",   # access via order.delivery_info
         primary_key=True,
-    )
-
-    manufacturer_attachment = models.FileField(
-        upload_to=manufacturer_upload_to,
-        blank=True,
-        null=True,
-    )
-
-    testing_attachment = models.FileField(
-        upload_to=testing_upload_to,
-        blank=True,
-        null=True,
     )
 
     uin_registration_number = models.CharField(
@@ -167,3 +164,48 @@ class OrderDeliveryInfo(models.Model):
 
     def __str__(self):
         return f"Delivery info for {self.order.order_number}"
+
+
+def delivery_attachment_upload_to(instance, filename):
+    """
+    File path for all delivery attachments, grouped by order_number and type.
+
+    Example:
+      orders/ORD_00004/manufacturer/<file>
+      orders/ORD_00004/testing/<file>
+    """
+    order_number = instance.delivery_info.order.order_number
+    folder = instance.attachment_type.lower()  # "manufacturer" or "testing"
+    return f"orders/{order_number}/{folder}/{filename}"
+
+
+class OrderDeliveryAttachment(models.Model):
+    """
+    Multiple attachments per order delivery info.
+
+    - attachment_type = "MANUFACTURER" or "TESTING"
+    - file = the uploaded document
+    """
+
+    ATTACHMENT_TYPE_CHOICES = [
+        ("MANUFACTURER", "Manufacturer"),
+        ("TESTING", "Testing"),
+    ]
+
+    delivery_info = models.ForeignKey(
+        OrderDeliveryInfo,
+        related_name="attachments",
+        on_delete=models.CASCADE,
+    )
+
+    attachment_type = models.CharField(
+        max_length=20,
+        choices=ATTACHMENT_TYPE_CHOICES,
+    )
+
+    file = models.FileField(upload_to=delivery_attachment_upload_to)
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.delivery_info.order.order_number} - {self.attachment_type} - {self.file.name}"

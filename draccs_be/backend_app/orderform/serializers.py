@@ -1,5 +1,13 @@
+# backend_app/orderform/serializers.py
+
 from rest_framework import serializers
-from .models import ChecklistItem, Order, OrderItem, OrderDeliveryInfo
+from .models import (
+    ChecklistItem,
+    Order,
+    OrderItem,
+    OrderDeliveryInfo,
+    OrderDeliveryAttachment,   #  NEW: import this
+)
 
 
 class ChecklistItemSerializer(serializers.ModelSerializer):
@@ -44,16 +52,37 @@ class OrderItemSerializer(serializers.ModelSerializer):
         ]
 
 
+# ============ NEW: Attachment Serializer ============
+
+class OrderDeliveryAttachmentSerializer(serializers.ModelSerializer):
+    """
+    Single attachment row:
+      - attachment_type: "MANUFACTURER" or "TESTING"
+      - file: the uploaded document
+    """
+
+    class Meta:
+        model = OrderDeliveryAttachment
+        fields = [
+            "id",
+            "attachment_type",
+            "file",
+            "uploaded_at",
+        ]
+
+
 # ============ OrderDeliveryInfoSerializer (UPDATED) ============
 
 class OrderDeliveryInfoSerializer(serializers.ModelSerializer):
     """
-    Serializer for:
-      - manufacturer_attachment
-      - testing_attachment
+    Serializer for per-order delivery info:
+
       - uin_registration_number
       - ready_for_delivery
-    linked 1:1 with an Order.
+      - manufacturer_attachments[]  (list)
+      - testing_attachments[]       (list)
+
+    Attachments come from OrderDeliveryAttachment (many rows per order).
     """
 
     # 🔑 Make "order" writable as a PK reference to Order
@@ -68,18 +97,32 @@ class OrderDeliveryInfoSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+    # Two groups of attachments:
+    manufacturer_attachments = serializers.SerializerMethodField()
+    testing_attachments = serializers.SerializerMethodField()
+
     class Meta:
         model = OrderDeliveryInfo
         fields = [
             "order",                    # you POST/PATCH this with the Order.id
             "order_number",             # read-only helper
-            "manufacturer_attachment",
-            "testing_attachment",
             "uin_registration_number",
             "ready_for_delivery",
+            "manufacturer_attachments", # list of attachments with type=MANUFACTURER
+            "testing_attachments",      # list of attachments with type=TESTING
         ]
-        # ⛔ DO NOT mark 'order' as read-only here, we need it writable
-        # read_only_fields = ["order"]  # <-- removed
+
+    def get_manufacturer_attachments(self, obj):
+        qs = obj.attachments.filter(attachment_type="MANUFACTURER")
+        return OrderDeliveryAttachmentSerializer(
+            qs, many=True, context=self.context
+        ).data
+
+    def get_testing_attachments(self, obj):
+        qs = obj.attachments.filter(attachment_type="TESTING")
+        return OrderDeliveryAttachmentSerializer(
+            qs, many=True, context=self.context
+        ).data
 
 
 # ================== OrderSerializer ==================
@@ -88,7 +131,7 @@ class OrderSerializer(serializers.ModelSerializer):
     # Editable per-order checklist
     items = OrderItemSerializer(many=True, required=False)
 
-    # Nested read-only delivery info block (filled by OrderDeliveryInfo)
+    # Nested read-only delivery info block (now includes lists of attachments)
     delivery_info = OrderDeliveryInfoSerializer(read_only=True)
 
     class Meta:
@@ -107,8 +150,8 @@ class OrderSerializer(serializers.ModelSerializer):
             "remarks",
             "created_at",
             "updated_at",
-            "items",          # existing
-            "delivery_info",  # includes order, order_number, attachments, UIN, flag
+            "items",
+            "delivery_info",
         ]
         read_only_fields = ["order_number", "created_at", "updated_at"]
 
