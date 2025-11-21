@@ -7,11 +7,13 @@ from .models import (
     ChecklistItem,
     Order,
     OrderDeliveryInfo,
+    OrderDeliveryAttachment,   # NEW
 )
 from .serializers import (
     ChecklistItemSerializer,
     OrderSerializer,
     OrderDeliveryInfoSerializer,
+    OrderDeliveryAttachmentSerializer,   # NEW
 )
 
 
@@ -45,9 +47,12 @@ class OrderDeliveryInfoViewSet(viewsets.ModelViewSet):
     /api/order-delivery-info/<order_id>/
 
     Use this to:
-      - Upload manufacturer/testing attachments
       - Set UIN registration number
       - Toggle ready_for_delivery flag
+
+    NOTE:
+      Attachments (manufacturer/testing) are managed via
+      /api/order-delivery-attachments/, not here.
 
     POST behaviour:
       - If delivery info for 'order' exists -> update it
@@ -58,9 +63,10 @@ class OrderDeliveryInfoViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """
-        Override POST so that:
-        - It updates existing OrderDeliveryInfo for the given 'order'
-        - Or creates a new one if none exists.
+        Upsert-style:
+          - request.data MUST contain 'order' (Order ID)
+          - If an OrderDeliveryInfo already exists for that order -> update it
+          - Else -> create it, then update fields
         """
         order_id = request.data.get("order")
 
@@ -70,15 +76,41 @@ class OrderDeliveryInfoViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            # Does a row already exist for this order?
-            instance = OrderDeliveryInfo.objects.get(order_id=order_id)
-        except OrderDeliveryInfo.DoesNotExist:
-            # No existing row -> normal create
-            return super().create(request, *args, **kwargs)
+        # Get or create the row for this order
+        delivery_info, created = OrderDeliveryInfo.objects.get_or_create(
+            order_id=order_id
+        )
 
-        # Existing row -> update it (partial update, so you can send only changed fields)
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        # Now apply the incoming data (uin_registration_number, ready_for_delivery, etc.)
+        serializer = self.get_serializer(
+            delivery_info, data=request.data, partial=True
+        )
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class OrderDeliveryAttachmentViewSet(viewsets.ModelViewSet):
+    """
+    /api/order-delivery-attachments/
+    /api/order-delivery-attachments/<id>/
+
+    Use this to upload and manage attachments:
+
+      POST (multipart/form-data):
+        - order:          <Order.id>  (e.g., 1)
+        - attachment_type: "MANUFACTURER" or "TESTING"
+        - file:           <single file>
+
+      You can call POST multiple times to add many files.
+    """
+    queryset = (
+        OrderDeliveryAttachment.objects
+        .select_related("delivery_info", "delivery_info__order")
+        .all()
+    )
+    serializer_class = OrderDeliveryAttachmentSerializer
