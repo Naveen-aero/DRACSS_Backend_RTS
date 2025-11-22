@@ -62,11 +62,11 @@ class ChecklistItem(models.Model):
 
 class Order(models.Model):
     STATUS_CHOICES = [
-        ("DRAFT", "Draft"),
-        ("CONFIRMED", "Confirmed"),
-        ("DISPATCHED", "Dispatched"),
-        ("DELIVERED", "Delivered"),
-        ("CANCELLED", "Cancelled"),
+        ("REQUESTED", "Requested"),
+        ("MANUFACTURING", "Manufacturing"),
+        ("TESTING", "Testing"),
+        ("READY FOR DELIVERY", "Ready for delivery"),
+        
     ]
 
     order_number = models.CharField(
@@ -87,7 +87,7 @@ class Order(models.Model):
     # Fixed: use a pure date, not datetime
     order_date = models.DateField(default=today_local)
 
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="DRAFT")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="REQUESTED")
     remarks = models.TextField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
