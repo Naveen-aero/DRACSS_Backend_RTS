@@ -19,6 +19,7 @@ trigger_model_save.py
 
 # Django migrations
 */migrations/
+*/*/migrations/
 
 # Static files
 staticfiles/
