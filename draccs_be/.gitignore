@@ -1,0 +1,36 @@
+# Django/Python specific ignores
+__pycache__/
+*/__pycache__/
+*.py[cod]
+*.sqlite3
+*.log
+*.pot
+*.pyc
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+.env
+local_settings.py
+Data_migration_script.py
+trigger_model_save.py
+
+# Django migrations
+*/migrations/
+
+# Static files
+staticfiles/
+static/
+media/
+exports/
+logs/
+
+# Editor/IDE files
+.vscode/
+.idea/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
