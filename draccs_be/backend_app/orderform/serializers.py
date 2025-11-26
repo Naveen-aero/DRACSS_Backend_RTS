@@ -1,5 +1,3 @@
-# backend_app/orderform/serializers.py
-
 from rest_framework import serializers
 from .models import (
     ChecklistItem,
@@ -53,6 +51,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
             "is_from_template",
             "remarks",
         ]
+        # 🔴 IMPORTANT: id should be read-only so PATCH/PUT doesn't try to change it
+        read_only_fields = ["id"]
 
 
 # -------------------------------------------------------------------

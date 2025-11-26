@@ -6,12 +6,14 @@ from rest_framework.response import Response
 from .models import (
     ChecklistItem,
     Order,
+    OrderItem,                 #ADDED
     OrderDeliveryInfo,
     OrderDeliveryAttachment,   # NEW
 )
 from .serializers import (
     ChecklistItemSerializer,
     OrderSerializer,
+    OrderItemSerializer,              # ADDED
     OrderDeliveryInfoSerializer,
     OrderDeliveryAttachmentSerializer,   # NEW
 )
@@ -39,6 +41,24 @@ class OrderViewSet(viewsets.ModelViewSet):
         .order_by("-id")
     )
     serializer_class = OrderSerializer
+
+
+class OrderItemViewSet(viewsets.ModelViewSet):
+    """
+    /api/order-items/
+    /api/order-items/<id>/
+
+    Use this to view/update a single checklist row (OrderItem).
+
+    Example:
+      PATCH /api/order-items/52/
+      {
+        "is_checked": true,
+        "quantity_delivered": 1
+      }
+    """
+    queryset = OrderItem.objects.all()
+    serializer_class = OrderItemSerializer
 
 
 class OrderDeliveryInfoViewSet(viewsets.ModelViewSet):
