@@ -51,7 +51,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
             "is_from_template",
             "remarks",
         ]
-        #  IMPORTANT: id should be read-only so PATCH/PUT doesn't try to change it
+        # IMPORTANT: id should be read-only so PATCH/PUT doesn't try to change it
         read_only_fields = ["id"]
 
 
@@ -62,20 +62,25 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderDeliveryAttachmentSerializer(serializers.ModelSerializer):
     """
     One row = one attachment
-      - attachment_type: "MANUFACTURER" or "TESTING" (optional)
+      - attachment_type: "MANUFACTURER" / "TESTING" / default "ATTACHMENT"
       - file: uploaded document
       - order: Order.id (write-only)
 
-    If attachment_type is not provided, it will be treated as a generic
-    attachment and will appear under `attachments` in OrderDeliveryInfo.
+    In the API form:
+      - Dropdown shows only Manufacturer / Testing.
+      - If user does NOT select attachment_type:
+            we save it as "ATTACHMENT" (default/general files).
     """
 
-    # Use model choices so DRF shows dropdown (Manufacturer / Testing)
+    # UI dropdown: only show manufacturer/testing, not "ATTACHMENT"
     attachment_type = serializers.ChoiceField(
-        choices=OrderDeliveryAttachment._meta.get_field("attachment_type").choices,
-        required=False,          # can be left empty
-        allow_blank=True,        # empty string allowed from forms
-        allow_null=True,         # None allowed
+        choices=[
+            ("MANUFACTURER", "Manufacturer"),
+            ("TESTING", "Testing"),
+        ],
+        required=False,       # can be omitted
+        allow_blank=True,
+        allow_null=True,
     )
 
     # You POST using the Order primary key
@@ -106,28 +111,35 @@ class OrderDeliveryAttachmentSerializer(serializers.ModelSerializer):
         """
         When you POST:
           - order (id)
-          - attachment_type (optional: "MANUFACTURER"/"TESTING")
+          - optional attachment_type ("MANUFACTURER"/"TESTING")
           - file
 
         If attachment_type is missing/blank:
-          -> stored as generic (attachment_type = None)
-          -> shows only in `attachments` list.
+          -> store as "ATTACHMENT" (default/general bucket).
         """
+        # detach order
         order = validated_data.pop("order")
 
-        attachment_type = validated_data.get("attachment_type")
-        if not attachment_type:
-            # No type selected -> generic
-            validated_data["attachment_type"] = None
+        # normalize type
+        raw_type = validated_data.pop("attachment_type", None)
+        if raw_type in ("MANUFACTURER", "TESTING"):
+            final_type = raw_type
+        else:
+            final_type = "ATTACHMENT"
 
+        # ensure delivery_info row exists
         delivery_info, _ = OrderDeliveryInfo.objects.get_or_create(order=order)
+
+        # create attachment with final_type (never None)
         return OrderDeliveryAttachment.objects.create(
-            delivery_info=delivery_info, **validated_data
+            delivery_info=delivery_info,
+            attachment_type=final_type,
+            **validated_data,
         )
 
 
 # -------------------------------------------------------------------
-# 3) DELIVERY INFO SERIALIZER (SCALAR FIELDS + READ-ONLY ATTACHMENT LISTS)
+# 3) DELIVERY INFO SERIALIZER (SCALAR FIELDS + ATTACHMENT LISTS)
 # -------------------------------------------------------------------
 
 class OrderDeliveryInfoSerializer(serializers.ModelSerializer):
@@ -135,9 +147,10 @@ class OrderDeliveryInfoSerializer(serializers.ModelSerializer):
     Per-order delivery info:
       - uin_registration_number
       - ready_for_delivery
-      - attachments[]              (generic / default)
-      - manufacturer_attachments[] (read-only list)
-      - testing_attachments[]      (read-only list)
+
+      - attachments[]              (default/general files -> ATTACHMENT)
+      - manufacturer_attachments[] (attachment_type="MANUFACTURER")
+      - testing_attachments[]      (attachment_type="TESTING")
 
     Attachments themselves are created via /api/order-delivery-attachments/
     using OrderDeliveryAttachmentSerializer.
@@ -161,7 +174,7 @@ class OrderDeliveryInfoSerializer(serializers.ModelSerializer):
             "order_number",
             "uin_registration_number",
             "ready_for_delivery",
-            "attachments",            # default / generic
+            "attachments",            # default/general bucket
             "manufacturer_attachments",
             "testing_attachments",
         ]
@@ -169,10 +182,8 @@ class OrderDeliveryInfoSerializer(serializers.ModelSerializer):
         read_only_fields = ["order"]
 
     def get_attachments(self, obj):
-        """
-        Generic/default attachments: those with no specific type.
-        """
-        qs = obj.attachments.filter(attachment_type__isnull=True)
+        # Default/general attachments (ATTACHMENT)
+        qs = obj.attachments.filter(attachment_type="ATTACHMENT")
         return OrderDeliveryAttachmentSerializer(
             qs, many=True, context=self.context
         ).data

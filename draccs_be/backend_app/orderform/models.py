@@ -66,7 +66,8 @@ class Order(models.Model):
         ("MANUFACTURING", "Manufacturing"),
         ("TESTING", "Testing"),
         ("READY FOR DELIVERY", "Ready for delivery"),
-        ("DELIVERED", "Delivered"),
+        # add "DELIVERED" back if you need it:
+        # ("DELIVERED", "Delivered"),
     ]
 
     order_number = models.CharField(
@@ -132,7 +133,7 @@ class OrderItem(models.Model):
         return f"{self.order.order_number} - {self.description}"
 
 
-# ================== NEW / CHANGED CODE STARTS HERE ==================
+# ================== DELIVERY INFO + ATTACHMENTS ==================
 
 
 class OrderDeliveryInfo(models.Model):
@@ -142,7 +143,7 @@ class OrderDeliveryInfo(models.Model):
     - UIN registration number
     - Ready for delivery flag
 
-    Attachments (manufacturer/testing/default) are stored in a separate table:
+    Attachments (manufacturer/testing/default) are stored in:
     OrderDeliveryAttachment (many rows per order).
     """
 
@@ -173,11 +174,12 @@ def delivery_attachment_upload_to(instance, filename):
     Examples:
       orders/ORD_00004/manufacturer/<file>
       orders/ORD_00004/testing/<file>
-      orders/ORD_00004/attachments/<file>   # default bucket when no type
+      orders/ORD_00004/attachments/<file>   # default bucket
     """
     order_number = instance.delivery_info.order.order_number
 
-    # attachment_type may be None for default attachments
+    # attachment_type will always be one of:
+    # "MANUFACTURER", "TESTING", "ATTACHMENT"
     type_value = (instance.attachment_type or "").lower()
 
     if type_value == "manufacturer":
@@ -185,7 +187,6 @@ def delivery_attachment_upload_to(instance, filename):
     elif type_value == "testing":
         folder = "testing"
     else:
-        # Default folder when no specific type selected
         folder = "attachments"
 
     return f"orders/{order_number}/{folder}/{filename}"
@@ -195,13 +196,17 @@ class OrderDeliveryAttachment(models.Model):
     """
     Multiple attachments per order delivery info.
 
-    - attachment_type = "MANUFACTURER", "TESTING", or None (default)
+    - attachment_type:
+        "MANUFACTURER"  -> manufacturer_attachments
+        "TESTING"       -> testing_attachments
+        "ATTACHMENT"    -> generic 'attachments' bucket (default)
     - file = the uploaded document
     """
 
     ATTACHMENT_TYPE_CHOICES = [
         ("MANUFACTURER", "Manufacturer"),
         ("TESTING", "Testing"),
+        ("ATTACHMENT", "Attachment"),   # default/general section
     ]
 
     delivery_info = models.ForeignKey(
@@ -210,12 +215,11 @@ class OrderDeliveryAttachment(models.Model):
         on_delete=models.CASCADE,
     )
 
-    # UPDATED: allow null/blank so we can have generic/default attachments
+    # NOT NULL; always one of the choices above
     attachment_type = models.CharField(
         max_length=20,
         choices=ATTACHMENT_TYPE_CHOICES,
-        null=True,        # allow no type (default attachments)
-        blank=True,       # empty in forms/API
+        default="ATTACHMENT",   # default bucket when nothing is selected
     )
 
     file = models.FileField(upload_to=delivery_attachment_upload_to)
