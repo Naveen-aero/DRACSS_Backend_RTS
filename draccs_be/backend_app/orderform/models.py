@@ -66,8 +66,7 @@ class Order(models.Model):
         ("MANUFACTURING", "Manufacturing"),
         ("TESTING", "Testing"),
         ("READY FOR DELIVERY", "Ready for delivery"),
-        # add "DELIVERED" back if you need it:
-        # ("DELIVERED", "Delivered"),
+        ("DELIVERED", "Delivered"),
     ]
 
     order_number = models.CharField(
