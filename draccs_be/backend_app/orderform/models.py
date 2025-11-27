@@ -66,6 +66,7 @@ class Order(models.Model):
         ("MANUFACTURING", "Manufacturing"),
         ("TESTING", "Testing"),
         ("READY FOR DELIVERY", "Ready for delivery"),
+        ("DELIVERED","Delivered"),
         
     ]
 

@@ -51,7 +51,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
             "is_from_template",
             "remarks",
         ]
-        # 🔴 IMPORTANT: id should be read-only so PATCH/PUT doesn't try to change it
+        #  IMPORTANT: id should be read-only so PATCH/PUT doesn't try to change it
         read_only_fields = ["id"]
 
 
