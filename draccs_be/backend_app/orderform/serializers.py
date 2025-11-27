@@ -77,6 +77,7 @@ class OrderDeliveryAttachmentSerializer(serializers.ModelSerializer):
         choices=[
             ("MANUFACTURER", "Manufacturer"),
             ("TESTING", "Testing"),
+            ("ATTACHMENT","Attachment"),
         ],
         required=False,       # can be omitted
         allow_blank=True,
@@ -122,7 +123,7 @@ class OrderDeliveryAttachmentSerializer(serializers.ModelSerializer):
 
         # normalize type
         raw_type = validated_data.pop("attachment_type", None)
-        if raw_type in ("MANUFACTURER", "TESTING"):
+        if raw_type in ("MANUFACTURER", "TESTING","ATTACHMENT"):
             final_type = raw_type
         else:
             final_type = "ATTACHMENT"
