@@ -224,7 +224,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "billing_address",
             "shipping_address",
             "drone_model",
-            "Required_by_date",
+            "required_by_date",
             "status",
             "remarks",
             "created_at",

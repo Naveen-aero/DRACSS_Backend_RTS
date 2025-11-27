@@ -85,7 +85,7 @@ class Order(models.Model):
     drone_model = models.CharField(max_length=100, default="Bhumi A10E")
 
     # Fixed: use a pure date, not datetime
-    order_date = models.DateField(default=today_local)
+    required_by_date  = models.DateField(default=today_local)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="REQUESTED")
     remarks = models.TextField(blank=True, null=True)
