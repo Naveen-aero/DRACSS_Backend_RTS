@@ -83,7 +83,8 @@ class Order(models.Model):
     shipping_address = models.TextField(blank=True, null=True)
 
     drone_model = models.CharField(max_length=100, default="Bhumi A10E")
-
+    
+    number_of_drone = models.PositiveIntegerField(default=1)
     # Fixed: use a pure date, not datetime
     required_by_date  = models.DateField(default=today_local)
 

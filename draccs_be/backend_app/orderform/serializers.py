@@ -114,7 +114,7 @@ class OrderDeliveryAttachmentSerializer(serializers.ModelSerializer):
           - order (id)
           - optional attachment_type ("MANUFACTURER"/"TESTING")
           - file
-
+ 
         If attachment_type is missing/blank:
           -> store as "ATTACHMENT" (default/general bucket).
         """
@@ -224,6 +224,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "billing_address",
             "shipping_address",
             "drone_model",
+            "number_of_drone", 
             "required_by_date",
             "status",
             "remarks",
@@ -246,12 +247,14 @@ class OrderSerializer(serializers.ModelSerializer):
                 drone_model=order.drone_model
             ).order_by("sort_order")
 
+            multiplier = order.number_of_drone or 1 
+
             for tmpl in template_items:
                 OrderItem.objects.create(
                     order=order,
                     checklist_item=tmpl,
                     description=tmpl.description,
-                    quantity_ordered=tmpl.default_quantity,
+                    quantity_ordered=tmpl.default_quantity*multiplier,
                     quantity_delivered=0,
                     is_checked=False,
                     is_from_template=True,
