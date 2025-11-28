@@ -28,6 +28,19 @@ class DroneRegistration(models.Model):
     attachment = models.FileField(upload_to=drone_attachment_path, blank=True, null=True)
     image = models.ImageField(upload_to=drone_image_path, blank=True, null=True)  #  NEW
 
+    client_details = models.JSONField(
+        blank=True,
+        null=True,
+        default=list,
+        help_text=(
+            "Optional list of client entries with keys: "
+            "model_name, uin_number, drone_serial_number, "
+            "flight_controller_serial_number, remote_controller, "
+            "battery_charger_serial_number, battery_serial_number_1, "
+            "battery_serial_number_2"
+        ),
+    )
+    
     # Flags
     registered = models.BooleanField(default=False)  # NEW
     is_active = models.BooleanField(default=True)
