@@ -19,7 +19,7 @@ class DroneRegistrationViewSet(viewsets.ModelViewSet):
         "model_name",
         "uin_number",
         "drone_serial_number",
-        "drone_id",
+        "drone_id", 
         "manufacturer",
     ]
     ordering_fields = ["created_at", "model_name", "manufacturer", "registered"]

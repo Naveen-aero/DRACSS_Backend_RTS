@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'corsheaders', 
     'backend_app.drone_registration',
     'backend_app.orderform.apps.OrderformConfig', 
+    'backend_app.client.apps.ClientConfig',
 ]
 
 MIDDLEWARE = [
