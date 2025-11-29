@@ -37,7 +37,7 @@ class DroneRegistration(models.Model):
             "model_name, uin_number, drone_serial_number, "
             "flight_controller_serial_number, remote_controller, "
             "battery_charger_serial_number, battery_serial_number_1, "
-            "battery_serial_number_2"
+            "battery_serial_number_2, drone_type, attachment"
         ),
     )
     

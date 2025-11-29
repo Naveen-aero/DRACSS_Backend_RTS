@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import DroneRegistration
 
 
-# 🔹 One client entry inside the client list
+#  One client entry inside the client list
 class ClientEntrySerializer(serializers.Serializer):
     model_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     uin_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -20,6 +20,21 @@ class ClientEntrySerializer(serializers.Serializer):
     battery_serial_number_2 = serializers.CharField(
         required=False, allow_blank=True, allow_null=True
     )
+    drone_type = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True
+    )
+    attachment = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True
+    )
+
+
+def drone_attachment_path(instance, filename):
+    uin = instance.uin_number or "no_uin"
+    return f"drone_attachments/{uin}/{filename}"
+
+def drone_image_path(instance, filename):
+    uin = instance.uin_number or "no_uin"
+    return f"drone_images/{uin}/{filename}"
 
 
 class DroneRegistrationSerializer(serializers.ModelSerializer):
