@@ -21,9 +21,9 @@ class ClientEntrySerializer(serializers.Serializer):
     )
     battery_serial_number_2 = serializers.CharField(
         required=False, allow_blank=True, allow_null=True
-    )
-    # ❌ IMPORTANT: we do NOT declare drone_type / attachment here.
-    # Those will be added only in the response via to_representation().
+    )   
+    #  IMPORTANT: we do NOT declare drone_type / attachment here.
+    # Those will be added only in the response via to_representation(). 
 
 
 class DroneRegistrationSerializer(serializers.ModelSerializer):
