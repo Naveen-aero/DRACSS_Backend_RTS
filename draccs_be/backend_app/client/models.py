@@ -12,7 +12,7 @@ class Client(models.Model):
     client_id = models.CharField(
         max_length=20,
         primary_key=True,
-        editable=False,
+        editable=False, 
         unique=True,
     )
 
@@ -32,7 +32,8 @@ class Client(models.Model):
     branch_name = models.CharField(max_length=255, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
-
+    drones = models.JSONField(default=list, blank=True)
+    
     def save(self, *args, **kwargs):
         """
         Auto-generate client_id such as CLT_00001, CLT_00002, etc.
