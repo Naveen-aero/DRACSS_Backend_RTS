@@ -16,7 +16,7 @@ class DroneRegistration(models.Model):
     # Often unique identifiers
     uin_number = models.CharField(max_length=64, unique=True)
     drone_serial_number = models.CharField(max_length=120, unique=True)
-    drone_id = models.CharField(max_length=64, unique=True, blank=True, null=True)  # NEW
+    drone_id = models.CharField(max_length=64, unique=True, blank=True, null=True)
 
     flight_controller_serial_number = models.CharField(max_length=120, blank=True)
     remote_controller = models.CharField(max_length=120, blank=True)
@@ -26,7 +26,7 @@ class DroneRegistration(models.Model):
 
     # File uploads
     attachment = models.FileField(upload_to=drone_attachment_path, blank=True, null=True)
-    image = models.ImageField(upload_to=drone_image_path, blank=True, null=True)  #  NEW
+    image = models.ImageField(upload_to=drone_image_path, blank=True, null=True)
 
     client_details = models.JSONField(
         blank=True,
@@ -40,9 +40,9 @@ class DroneRegistration(models.Model):
             "battery_serial_number_2, drone_type, attachment"
         ),
     )
-    
+
     # Flags
-    registered = models.BooleanField(default=False)  # NEW
+    registered = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
     # Timestamps
