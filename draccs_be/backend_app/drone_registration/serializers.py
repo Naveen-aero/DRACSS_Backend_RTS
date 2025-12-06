@@ -101,7 +101,6 @@
 
 #         data["client"] = enriched_clients
 #         return data
-
 from rest_framework import serializers
 from .models import DroneRegistration
 
@@ -169,7 +168,7 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
     # --------------------------------------------------
-    # Helper: normalize client[].attachment paths (for DB)
+    # Helper: normalize client[].attachment paths
     # --------------------------------------------------
     def _normalize_client_attachments(self, uin_number, client_entries):
         """
@@ -190,7 +189,7 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
             entry = dict(entry)  # make a copy to avoid mutating in-place
             att = entry.get("attachment")
 
-            # Treat empty dict/list as no attachment
+            # 🔹 Treat empty dict/list as no attachment
             if isinstance(att, dict) and not att:
                 att = None
             if isinstance(att, list) and not att:
@@ -208,6 +207,7 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
                     elif "filename" in att:
                         att = att["filename"]
                     else:
+                        # Fallback: string representation
                         att = str(att)
 
                 # If it's some other type (file object / int / etc), cast to string
@@ -215,11 +215,8 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
                     att = str(att)
 
                 if att:
-                    # If already a URL, keep it
-                    if att.startswith("http://") or att.startswith("https://"):
-                        entry["attachment"] = att
                     # If no slash in value, treat it as a simple filename
-                    elif "/" not in att and "\\" not in att:
+                    if "/" not in att and "\\" not in att:
                         entry["attachment"] = f"drone_attachments/{uin_number}/{att}"
                     else:
                         entry["attachment"] = att  # already a path
@@ -259,11 +256,6 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         return instance
 
     def update(self, instance, validated_data):
-        """
-        On update:
-        - If client_details is provided and some entries have no attachment,
-          we can still normalize any attachments that are provided.
-        """
         if "client_details" in validated_data:
             client_entries = validated_data.get("client_details") or []
             uin_number = validated_data.get("uin_number", instance.uin_number)
@@ -276,31 +268,15 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
     # Read / Output
     # --------------------------------------------------
     def to_representation(self, instance):
-        """
-        When returning data:
-        - client_details already contains normalized attachment paths
-        - Only auto-fill drone_type from parent if missing
-        -  Mirror top-level attachment URL into each client[].attachment
-          if top-level attachment exists.
-        """
         data = super().to_representation(instance)
-
         parent_drone_type = data.get("drone_type")
-        top_attachment = data.get("attachment")  # e.g. full URL from FileField
 
         client_entries = data.get("client") or []
         enriched_clients = []
 
         for entry in client_entries:
             entry = dict(entry)
-
-            # Only set drone_type if missing; do not overwrite if already present
             entry.setdefault("drone_type", parent_drone_type)
-
-            #  key line: if we have a top-level attachment URL, reuse it for the client
-            if top_attachment:
-                entry["attachment"] = top_attachment
-
             enriched_clients.append(entry)
 
         data["client"] = enriched_clients
