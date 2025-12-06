@@ -169,23 +169,26 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
     # --------------------------------------------------
-    # Helper: normalize client[].attachment (optional)
+    # Helper: normalize client[].attachment paths (for DB)
     # --------------------------------------------------
     def _normalize_client_attachments(self, uin_number, client_entries):
         """
-        Clean up whatever frontend sends for client[].attachment
-        into a string path, if present.
-
-        Does NOT copy from top-level attachment. That is done in
-        _fill_client_attachments_from_top().
+        Ensure each client entry's 'attachment' is stored under:
+            drone_attachments/<uin_number>/<filename>
+        if only a bare filename is provided.
+        Accepts attachment as string, list, dict, etc.
         """
         if not client_entries:
             return client_entries or []
 
+        # If there is no UIN, just return as-is (nothing to prefix with)
+        if not uin_number:
+            return [dict(entry) for entry in client_entries]
+
         normalized = []
         for entry in client_entries:
-            entry = dict(entry)  # make a copy
-            att = entry.get("attachment", None)
+            entry = dict(entry)  # make a copy to avoid mutating in-place
+            att = entry.get("attachment")
 
             # Treat empty dict/list as no attachment
             if isinstance(att, dict) and not att:
@@ -198,7 +201,7 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
                 if isinstance(att, list):
                     att = att[0] if att else ""
 
-                # If it's a dict, try keys like 'name' or 'filename'
+                # If it's a dict, try common keys like 'name' or 'filename'
                 if isinstance(att, dict):
                     if "name" in att:
                         att = att["name"]
@@ -207,56 +210,27 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
                     else:
                         att = str(att)
 
-                # Convert non-string to string
+                # If it's some other type (file object / int / etc), cast to string
                 if not isinstance(att, str):
                     att = str(att)
 
-                # If we also know the UIN, and att is only a filename,
-                # we can prefix with folder. (optional – keep if you like)
-                if uin_number and att and "/" not in att and "\\" not in att:
-                    entry["attachment"] = f"drone_attachments/{uin_number}/{att}"
+                if att:
+                    # If already a URL, keep it
+                    if att.startswith("http://") or att.startswith("https://"):
+                        entry["attachment"] = att
+                    # If no slash in value, treat it as a simple filename
+                    elif "/" not in att and "\\" not in att:
+                        entry["attachment"] = f"drone_attachments/{uin_number}/{att}"
+                    else:
+                        entry["attachment"] = att  # already a path
                 else:
-                    entry["attachment"] = att
+                    entry["attachment"] = None
             else:
                 entry["attachment"] = None
 
             normalized.append(entry)
 
         return normalized
-
-    # --------------------------------------------------
-    # Helper: copy top-level attachment path into client[]
-    # --------------------------------------------------
-    def _fill_client_attachments_from_top(self, instance, client_entries):
-        """
-        If the top-level FileField 'attachment' is present, and a client entry
-        has attachment empty / null / {} / [], copy the FileField path into it.
-
-        Result: you get
-          attachment: "http://127.0.0.1:8000/media/drone_attachments/..."
-          client[i].attachment: "drone_attachments/.../file.png"
-        """
-        if not client_entries:
-            return client_entries or []
-
-        # No top-level file? nothing to copy
-        if not instance.attachment or not hasattr(instance.attachment, "name"):
-            return client_entries
-
-        top_path = instance.attachment.name  # e.g. "drone_attachments/UIN/file.png"
-
-        updated = []
-        for entry in client_entries:
-            entry = dict(entry)
-            att = entry.get("attachment", None)
-
-            if att in (None, "", {}, []):
-                # copy direct relative path from FileField
-                entry["attachment"] = top_path
-
-            updated.append(entry)
-
-        return updated
 
     # --------------------------------------------------
     # Validation
@@ -272,68 +246,61 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         return value
 
     # --------------------------------------------------
-    # Create
+    # Create / Update (write side)
     # --------------------------------------------------
     def create(self, validated_data):
-        # Take out client_details from validated_data first
         client_entries = validated_data.pop("client_details", [])
+        uin_number = validated_data.get("uin_number")
 
-        # First create instance so FileField is saved properly
-        instance = super().create(validated_data)
-
-        # Now we know UIN and attachment path
-        uin_number = instance.uin_number
-
-        # 1) Normalize any client attachments frontend sent
         client_entries = self._normalize_client_attachments(uin_number, client_entries)
+        validated_data["client_details"] = client_entries
 
-        # 2) For entries with no attachment, copy from top-level FileField
-        client_entries = self._fill_client_attachments_from_top(instance, client_entries)
-
-        if client_entries:
-            instance.client_details = client_entries
-            instance.save(update_fields=["client_details"])
-
+        instance = super().create(validated_data)
         return instance
 
-    # --------------------------------------------------
-    # Update
-    # --------------------------------------------------
     def update(self, instance, validated_data):
-        # Pull out client_details if present
-        client_entries = validated_data.pop("client_details", None)
-
-        # Update base fields (including top-level attachment) first
-        instance = super().update(instance, validated_data)
-
-        # Only touch client_details if it was provided in the request
-        if client_entries is not None:
-            uin_number = instance.uin_number
-
-            # 1) Normalize what frontend sent
+        """
+        On update:
+        - If client_details is provided and some entries have no attachment,
+          we can still normalize any attachments that are provided.
+        """
+        if "client_details" in validated_data:
+            client_entries = validated_data.get("client_details") or []
+            uin_number = validated_data.get("uin_number", instance.uin_number)
             client_entries = self._normalize_client_attachments(uin_number, client_entries)
+            validated_data["client_details"] = client_entries
 
-            # 2) Copy top-level attachment path into empty client attachments
-            client_entries = self._fill_client_attachments_from_top(instance, client_entries)
-
-            instance.client_details = client_entries
-            instance.save(update_fields=["client_details"])
-
-        return instance
+        return super().update(instance, validated_data)
 
     # --------------------------------------------------
     # Read / Output
     # --------------------------------------------------
     def to_representation(self, instance):
+        """
+        When returning data:
+        - client_details already contains normalized attachment paths
+        - Only auto-fill drone_type from parent if missing
+        -  Mirror top-level attachment URL into each client[].attachment
+          if top-level attachment exists.
+        """
         data = super().to_representation(instance)
+
         parent_drone_type = data.get("drone_type")
+        top_attachment = data.get("attachment")  # e.g. full URL from FileField
 
         client_entries = data.get("client") or []
         enriched_clients = []
 
         for entry in client_entries:
             entry = dict(entry)
+
+            # Only set drone_type if missing; do not overwrite if already present
             entry.setdefault("drone_type", parent_drone_type)
+
+            #  key line: if we have a top-level attachment URL, reuse it for the client
+            if top_attachment:
+                entry["attachment"] = top_attachment
+
             enriched_clients.append(entry)
 
         data["client"] = enriched_clients
