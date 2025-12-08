@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/", include("backend_app.drone_registration.urls")),  # /api/drone_registration/...
     path("api/", include("backend_app.orderform.urls")),           # /api/orders/, /api/order-delivery-info/...
     path("api/", include("backend_app.client.urls")),
+    path("api/", include("backend_app.drone_image.urls")),
 ]
 
 # Serve uploaded files (like PDFs) in development

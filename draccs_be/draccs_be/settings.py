@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'backend_app.drone_registration',
     'backend_app.orderform.apps.OrderformConfig', 
     'backend_app.client.apps.ClientConfig',
+    'backend_app.drone_image',
 ]
 
 MIDDLEWARE = [

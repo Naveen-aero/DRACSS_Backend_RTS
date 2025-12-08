@@ -105,7 +105,7 @@
 from rest_framework import serializers
 from .models import DroneRegistration
 
-
+    
 # One client entry inside the client list
 class ClientEntrySerializer(serializers.Serializer):
     model_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
