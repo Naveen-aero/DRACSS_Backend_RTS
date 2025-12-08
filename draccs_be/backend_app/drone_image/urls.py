@@ -1,3 +1,5 @@
+# backend_app/drone_image/urls.py
+
 from django.urls import path
 from .views import (
     DroneImageListCreateView,
@@ -5,10 +7,10 @@ from .views import (
 )
 
 urlpatterns = [
-    # List + Create
+    # List + Create → /api/drone_images/
     path("drone_images/", DroneImageListCreateView.as_view(), name="drone-images"),
 
-    # Retrieve + Delete (and could be used for future PUT/PATCH)
+    # Retrieve + Delete (and optionally Update) → /api/drone_images/<id>/
     path(
         "drone_images/<int:pk>/",
         DroneImageRetrieveDestroyView.as_view(),

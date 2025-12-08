@@ -23,7 +23,9 @@ class DroneImageSerializer(serializers.ModelSerializer):
             "name",
             "image",
             "specification",
-            "created_at",   #  no extra spaces, exactly like this
+            "tutorial_video",        
+            "troubleshooting_video", 
+            "created_at",
         ]
 
     def create(self, validated_data):
