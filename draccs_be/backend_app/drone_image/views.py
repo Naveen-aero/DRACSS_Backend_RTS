@@ -8,7 +8,7 @@ from .serializers import DroneImageSerializer, DroneExtraImageSerializer
 class DroneImageListCreateView(generics.ListCreateAPIView):
     """
     GET  /api/drone_images/      -> list all drone images
-    POST /api/drone_images/      -> create new drone image (with image, spec, videos, extra images)
+    POST /api/drone_images/      -> create new drone image
     """
     queryset = DroneImage.objects.all()
     serializer_class = DroneImageSerializer
@@ -29,8 +29,12 @@ class DroneImageRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
 
 class DroneExtraImageDestroyView(generics.DestroyAPIView):
     """
-    DELETE /api/drone_images/extra/<id>/ -> delete a single extra image
+    DELETE /api/drone_images/<drone_pk>/images/<pk>/
+    -> delete a single extra image that belongs to that drone
     """
-    queryset = DroneExtraImage.objects.all()
     serializer_class = DroneExtraImageSerializer
-    # default parsers are fine for DELETE; no need for MultiPartParser here
+
+    def get_queryset(self):
+        # Only allow deleting images attached to this specific drone
+        drone_id = self.kwargs["drone_pk"]
+        return DroneExtraImage.objects.filter(drone_id=drone_id)
