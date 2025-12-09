@@ -31,7 +31,7 @@ class DroneImage(models.Model):
     def __str__(self):
         return self.name
 
-    # ensure files are removed from disk when deleting
+    # ensure files are removed from disk when deleting the whole drone
     def delete(self, *args, **kwargs):
         # delete main image
         if self.image:
@@ -61,3 +61,9 @@ class DroneExtraImage(models.Model):
 
     def __str__(self):
         return f"{self.drone.name} - extra image {self.id}"
+
+    # allow deleting a single extra image (file + DB row)
+    def delete(self, *args, **kwargs):
+        if self.image:
+            self.image.delete(save=False)  # remove file from /media/...
+        super().delete(*args, **kwargs)
