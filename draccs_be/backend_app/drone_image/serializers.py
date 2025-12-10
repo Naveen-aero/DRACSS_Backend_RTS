@@ -38,8 +38,15 @@
 #         if spec_data is not None:
 #             instance.specification = spec_data
 #         return super().update(instance, validated_data)
+
 from rest_framework import serializers
-from .models import DroneImage, DroneExtraImage, DroneAttachment
+from .models import (
+    DroneImage,
+    DroneExtraImage,
+    DroneAttachment,
+    DroneTutorialVideo,
+    DroneTroubleshootingVideo,
+)
 import json
 
 
@@ -53,6 +60,7 @@ class SpecificationSerializer(serializers.Serializer):
     flight_distance = serializers.CharField(required=False, allow_blank=True)
 
     def to_internal_value(self, data):
+        # Allow JSON string OR dict
         if isinstance(data, str):
             try:
                 data = json.loads(data)
@@ -75,15 +83,31 @@ class DroneAttachmentSerializer(serializers.ModelSerializer):
         fields = ["id", "file"]
 
 
+# -------- TUTORIAL VIDEO SERIALIZER (MULTIPLE) ----------
+class DroneTutorialVideoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DroneTutorialVideo
+        fields = ["id", "file"]
+
+
+# -------- TROUBLESHOOTING VIDEO SERIALIZER (MULTIPLE) ----------
+class DroneTroubleshootingVideoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DroneTroubleshootingVideo
+        fields = ["id", "file"]
+
+
 # -------- MAIN DRONE SERIALIZER ----------
 class DroneImageSerializer(serializers.ModelSerializer):
     specification = SpecificationSerializer(required=False)
 
-    # Read-only lists
+    # Read-only nested lists
     images = DroneExtraImageSerializer(many=True, read_only=True)
     attachments = DroneAttachmentSerializer(many=True, read_only=True)
+    tutorial_videos = DroneTutorialVideoSerializer(many=True, read_only=True)
+    troubleshooting_videos = DroneTroubleshootingVideoSerializer(many=True, read_only=True)
 
-    # For POST/PATCH: multiple extra images
+    # Write-only for multiple uploads
     images_upload = serializers.ListField(
         child=serializers.ImageField(
             max_length=None,
@@ -94,8 +118,27 @@ class DroneImageSerializer(serializers.ModelSerializer):
         required=False,
     )
 
-    # For POST/PATCH: multiple generic attachments
     attachments_upload = serializers.ListField(
+        child=serializers.FileField(
+            max_length=None,
+            allow_empty_file=False,
+            use_url=False,
+        ),
+        write_only=True,
+        required=False,
+    )
+
+    tutorial_videos_upload = serializers.ListField(
+        child=serializers.FileField(
+            max_length=None,
+            allow_empty_file=False,
+            use_url=False,
+        ),
+        write_only=True,
+        required=False,
+    )
+
+    troubleshooting_videos_upload = serializers.ListField(
         child=serializers.FileField(
             max_length=None,
             allow_empty_file=False,
@@ -110,22 +153,27 @@ class DroneImageSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
-            "image",                # main image (single)
+            "image",                    # main image (single)
             "specification",
-            "tutorial_video",
-            "troubleshooting_video",
-            "images",               # read-only extra images
-            "attachments",          # read-only attachments
-            "images_upload",        # write-only for extra images
-            "attachments_upload",   # write-only for attachments
+            # NOTE: single tutorial_video / troubleshooting_video removed from here
+            "images",                   # read-only extra images
+            "attachments",              # read-only attachments
+            "tutorial_videos",          # read-only list of tutorial videos
+            "troubleshooting_videos",   # read-only list of troubleshooting videos
+            "images_upload",            # write-only
+            "attachments_upload",       # write-only
+            "tutorial_videos_upload",   # write-only
+            "troubleshooting_videos_upload",  # write-only
             "created_at",
         ]
 
     def to_internal_value(self, data):
         """
         Normalize React FormData keys:
-        - images_upload[]       -> images_upload
-        - attachments_upload[]  -> attachments_upload
+        - images_upload[]
+        - attachments_upload[]
+        - tutorial_videos_upload[]
+        - troubleshooting_videos_upload[]
         """
         if hasattr(data, "getlist"):
             data = data.copy()
@@ -133,6 +181,10 @@ class DroneImageSerializer(serializers.ModelSerializer):
                 data.setlist("images_upload", data.getlist("images_upload[]"))
             if "attachments_upload[]" in data:
                 data.setlist("attachments_upload", data.getlist("attachments_upload[]"))
+            if "tutorial_videos_upload[]" in data:
+                data.setlist("tutorial_videos_upload", data.getlist("tutorial_videos_upload[]"))
+            if "troubleshooting_videos_upload[]" in data:
+                data.setlist("troubleshooting_videos_upload", data.getlist("troubleshooting_videos_upload[]"))
         return super().to_internal_value(data)
 
     # -------- CREATE --------
@@ -140,19 +192,29 @@ class DroneImageSerializer(serializers.ModelSerializer):
         spec_data = validated_data.pop("specification", None)
         extra_images = validated_data.pop("images_upload", [])
         extra_attachments = validated_data.pop("attachments_upload", [])
+        tutorial_videos = validated_data.pop("tutorial_videos_upload", [])
+        troubleshooting_videos = validated_data.pop("troubleshooting_videos_upload", [])
 
         if spec_data is not None:
             validated_data["specification"] = spec_data
 
         instance = DroneImage.objects.create(**validated_data)
 
-        # Save extra images
+        # Extra images
         for img in extra_images:
             DroneExtraImage.objects.create(drone=instance, image=img)
 
-        # Save attachments
+        # Attachments
         for f in extra_attachments:
             DroneAttachment.objects.create(drone=instance, file=f)
+
+        # Tutorial videos
+        for f in tutorial_videos:
+            DroneTutorialVideo.objects.create(drone=instance, file=f)
+
+        # Troubleshooting videos
+        for f in troubleshooting_videos:
+            DroneTroubleshootingVideo.objects.create(drone=instance, file=f)
 
         return instance
 
@@ -161,10 +223,13 @@ class DroneImageSerializer(serializers.ModelSerializer):
         spec_data = validated_data.pop("specification", None)
         extra_images = validated_data.pop("images_upload", [])
         extra_attachments = validated_data.pop("attachments_upload", [])
+        tutorial_videos = validated_data.pop("tutorial_videos_upload", [])
+        troubleshooting_videos = validated_data.pop("troubleshooting_videos_upload", [])
 
         if spec_data is not None:
             instance.specification = spec_data
 
+        # Other fields (name, image, etc.)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
@@ -177,5 +242,13 @@ class DroneImageSerializer(serializers.ModelSerializer):
         # Append new attachments
         for f in extra_attachments:
             DroneAttachment.objects.create(drone=instance, file=f)
+
+        # Append new tutorial videos
+        for f in tutorial_videos:
+            DroneTutorialVideo.objects.create(drone=instance, file=f)
+
+        # Append new troubleshooting videos
+        for f in troubleshooting_videos:
+            DroneTroubleshootingVideo.objects.create(drone=instance, file=f)
 
         return instance

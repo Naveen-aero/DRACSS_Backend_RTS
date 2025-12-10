@@ -39,14 +39,23 @@
 #         drone_id = self.kwargs["drone_pk"]
 #         return DroneExtraImage.objects.filter(drone_id=drone_id)
 
-from .models import DroneImage, DroneExtraImage, DroneAttachment
+from rest_framework import generics
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+
+from .models import (
+    DroneImage,
+    DroneExtraImage,
+    DroneAttachment,
+    DroneTutorialVideo,
+    DroneTroubleshootingVideo,
+)
 from .serializers import (
     DroneImageSerializer,
     DroneExtraImageSerializer,
     DroneAttachmentSerializer,
+    DroneTutorialVideoSerializer,
+    DroneTroubleshootingVideoSerializer,
 )
-from rest_framework import generics
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 
 class DroneImageListCreateView(generics.ListCreateAPIView):
@@ -71,13 +80,33 @@ class DroneExtraImageDestroyView(generics.DestroyAPIView):
 
 
 class DroneAttachmentDestroyView(generics.DestroyAPIView):
-    """
-    DELETE /api/drone_images/<drone_pk>/attachments/<pk>/
-    -> delete a single attachment that belongs to that drone
-    """
     serializer_class = DroneAttachmentSerializer
     lookup_field = "pk"
 
     def get_queryset(self):
         drone_id = self.kwargs["drone_pk"]
         return DroneAttachment.objects.filter(drone_id=drone_id)
+
+
+class DroneTutorialVideoDestroyView(generics.DestroyAPIView):
+    """
+    DELETE /api/drone_images/<drone_pk>/tutorial_videos/<pk>/
+    """
+    serializer_class = DroneTutorialVideoSerializer
+    lookup_field = "pk"
+
+    def get_queryset(self):
+        drone_id = self.kwargs["drone_pk"]
+        return DroneTutorialVideo.objects.filter(drone_id=drone_id)
+
+
+class DroneTroubleshootingVideoDestroyView(generics.DestroyAPIView):
+    """
+    DELETE /api/drone_images/<drone_pk>/troubleshooting_videos/<pk>/
+    """
+    serializer_class = DroneTroubleshootingVideoSerializer
+    lookup_field = "pk"
+
+    def get_queryset(self):
+        drone_id = self.kwargs["drone_pk"]
+        return DroneTroubleshootingVideo.objects.filter(drone_id=drone_id)

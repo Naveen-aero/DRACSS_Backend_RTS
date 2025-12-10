@@ -28,13 +28,14 @@
 #         name="drone-extra-image-destroy",
 #     ),
 # ]
-
 from django.urls import path
 from .views import (
     DroneImageListCreateView,
     DroneImageRetrieveUpdateDestroyView,
     DroneExtraImageDestroyView,
     DroneAttachmentDestroyView,
+    DroneTutorialVideoDestroyView,
+    DroneTroubleshootingVideoDestroyView,
 )
 
 urlpatterns = [
@@ -53,5 +54,19 @@ urlpatterns = [
         "drone_images/<int:drone_pk>/attachments/<int:pk>/",
         DroneAttachmentDestroyView.as_view(),
         name="drone-attachment-destroy",
+    ),
+
+    # delete tutorial video
+    path(
+        "drone_images/<int:drone_pk>/tutorial_videos/<int:pk>/",
+        DroneTutorialVideoDestroyView.as_view(),
+        name="drone-tutorial-video-destroy",
+    ),
+
+    # delete troubleshooting video
+    path(
+        "drone_images/<int:drone_pk>/troubleshooting_videos/<int:pk>/",
+        DroneTroubleshootingVideoDestroyView.as_view(),
+        name="drone-troubleshooting-video-destroy",
     ),
 ]
