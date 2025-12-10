@@ -68,49 +68,28 @@
 #             self.image.delete(save=False)  # remove file from /media/...
 #         super().delete(*args, **kwargs)
 
+
 from django.db import models
 
 
 class DroneImage(models.Model):
     name = models.CharField(max_length=255)
-
-    # Optional "main" image
-    image = models.ImageField(
-        upload_to="drone_images/",
-        blank=True,
-        null=True,
-    )
-
-    # Specifications stored as JSON
-    specification = models.JSONField(
-        default=dict,
-        blank=True,
-    )
-
+    image = models.ImageField(upload_to="drone_images/", blank=True, null=True)
+    specification = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
 
     def delete(self, *args, **kwargs):
-        # delete main image if exists
         if self.image:
             self.image.delete(save=False)
-
-        # NOTE:
-        # Extra images, attachments, tutorial_videos, troubleshooting_videos
-        # are deleted automatically via CASCADE
-        # AND their own delete() method removes the file from disk.
-
         super().delete(*args, **kwargs)
-
 
 
 class DroneExtraImage(models.Model):
     drone = models.ForeignKey(
-        DroneImage,
-        related_name="images",
-        on_delete=models.CASCADE,
+        DroneImage, related_name="images", on_delete=models.CASCADE
     )
     image = models.ImageField(upload_to="drone_images/multiple/")
 
@@ -123,12 +102,9 @@ class DroneExtraImage(models.Model):
         super().delete(*args, **kwargs)
 
 
-
 class DroneAttachment(models.Model):
     drone = models.ForeignKey(
-        DroneImage,
-        related_name="attachments",
-        on_delete=models.CASCADE,
+        DroneImage, related_name="attachments", on_delete=models.CASCADE
     )
     file = models.FileField(upload_to="drone_attachments/")
 
@@ -141,12 +117,9 @@ class DroneAttachment(models.Model):
         super().delete(*args, **kwargs)
 
 
-
 class DroneTutorialVideo(models.Model):
     drone = models.ForeignKey(
-        DroneImage,
-        related_name="tutorial_videos",
-        on_delete=models.CASCADE,
+        DroneImage, related_name="tutorial_videos", on_delete=models.CASCADE
     )
     file = models.FileField(upload_to="drone_videos/tutorials/multiple/")
 
@@ -159,12 +132,9 @@ class DroneTutorialVideo(models.Model):
         super().delete(*args, **kwargs)
 
 
-
 class DroneTroubleshootingVideo(models.Model):
     drone = models.ForeignKey(
-        DroneImage,
-        related_name="troubleshooting_videos",
-        on_delete=models.CASCADE,
+        DroneImage, related_name="troubleshooting_videos", on_delete=models.CASCADE
     )
     file = models.FileField(upload_to="drone_videos/troubleshooting/multiple/")
 

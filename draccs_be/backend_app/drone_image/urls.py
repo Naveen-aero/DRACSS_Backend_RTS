@@ -28,6 +28,7 @@
 #         name="drone-extra-image-destroy",
 #     ),
 # ]
+
 from django.urls import path
 from .views import (
     DroneImageListCreateView,
@@ -39,31 +40,46 @@ from .views import (
 )
 
 urlpatterns = [
-    path("drone_images/", DroneImageListCreateView.as_view(), name="drone-images"),
-    path("drone_images/<int:pk>/", DroneImageRetrieveUpdateDestroyView.as_view(), name="drone-image-detail"),
+    # List + Create
+    path(
+        "drone_images/",
+        DroneImageListCreateView.as_view(),
+        name="drone-images",
+    ),
 
-    # delete extra image
+    # Retrieve + Update + Delete whole drone record
+    path(
+        "drone_images/<int:pk>/",
+        DroneImageRetrieveUpdateDestroyView.as_view(),
+        name="drone-image-detail",
+    ),
+
+    # Delete a SINGLE extra image
+    # DELETE /api/drone_images/<drone_pk>/images/<pk>/
     path(
         "drone_images/<int:drone_pk>/images/<int:pk>/",
         DroneExtraImageDestroyView.as_view(),
         name="drone-extra-image-destroy",
     ),
 
-    # delete attachment
+    # Delete a SINGLE attachment
+    # DELETE /api/drone_images/<drone_pk>/attachments/<pk>/
     path(
         "drone_images/<int:drone_pk>/attachments/<int:pk>/",
         DroneAttachmentDestroyView.as_view(),
         name="drone-attachment-destroy",
     ),
 
-    # delete tutorial video
+    # Delete a SINGLE tutorial video
+    # DELETE /api/drone_images/<int:drone_pk>/tutorial_videos/<int:pk>/
     path(
         "drone_images/<int:drone_pk>/tutorial_videos/<int:pk>/",
         DroneTutorialVideoDestroyView.as_view(),
         name="drone-tutorial-video-destroy",
     ),
 
-    # delete troubleshooting video
+    # Delete a SINGLE troubleshooting video
+    # DELETE /api/drone_images/<int:drone_pk>/troubleshooting_videos/<int:pk>/
     path(
         "drone_images/<int:drone_pk>/troubleshooting_videos/<int:pk>/",
         DroneTroubleshootingVideoDestroyView.as_view(),
