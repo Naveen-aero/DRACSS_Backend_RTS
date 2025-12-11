@@ -67,7 +67,7 @@
 #         if self.image:
 #             self.image.delete(save=False)  # remove file from /media/...
 #         super().delete(*args, **kwargs)
-
+       
 from django.db import models
 
 
