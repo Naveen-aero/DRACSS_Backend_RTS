@@ -40,14 +40,9 @@
 #         return super().update(instance, validated_data)
 
 
+
 from rest_framework import serializers
-from .models import (
-    DroneImage,
-    DroneExtraImage,
-    DroneAttachment,
-    DroneTutorialVideo,
-    DroneTroubleshootingVideo,
-)
+from .models import DroneImage, DroneExtraImage
 import json
 
 
@@ -61,7 +56,7 @@ class SpecificationSerializer(serializers.Serializer):
     flight_distance = serializers.CharField(required=False, allow_blank=True)
 
     def to_internal_value(self, data):
-        # Allow JSON string OR dict
+        # Allow specification to be sent as JSON string in form-data
         if isinstance(data, str):
             try:
                 data = json.loads(data)
@@ -70,67 +65,104 @@ class SpecificationSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
 
-# -------- CHILD SERIALIZERS ----------
+# -------- EXTRA IMAGES SERIALIZER ----------
 class DroneExtraImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = DroneExtraImage
-        fields = ["id", "image"]
-
-
-class DroneAttachmentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DroneAttachment
-        fields = ["id", "file"]
-
-
-class DroneTutorialVideoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DroneTutorialVideo
-        fields = ["id", "file"]
-
-
-class DroneTroubleshootingVideoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DroneTroubleshootingVideo
-        fields = ["id", "file"]
+        fields = ["id", "image"]   # id is important for per-image delete
 
 
 # -------- MAIN DRONE SERIALIZER ----------
 class DroneImageSerializer(serializers.ModelSerializer):
     specification = SpecificationSerializer(required=False)
-
     images = DroneExtraImageSerializer(many=True, read_only=True)
-    attachments = DroneAttachmentSerializer(many=True, read_only=True)
-    tutorial_videos = DroneTutorialVideoSerializer(many=True, read_only=True)
-    troubleshooting_videos = DroneTroubleshootingVideoSerializer(many=True, read_only=True)
+
+    # For POST/PATCH: multiple extra images
+    images_upload = serializers.ListField(
+        child=serializers.ImageField(),
+        write_only=True,
+        required=False,
+    )
+
+    images_delete = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False,
+        help_text="IDs of DroneExtraImage to delete",
+    )
 
     class Meta:
         model = DroneImage
         fields = [
             "id",
             "name",
-            "image",
+            "image",                # main image (single)
             "specification",
-            "images",
-            "attachments",
-            "tutorial_videos",
-            "troubleshooting_videos",
+            "tutorial_video",
+            "troubleshooting_video",
+            "images",               # read-only extra images list
+            "images_upload",        # write-only list for upload
+            "images_delete", 
             "created_at",
         ]
 
+    def to_internal_value(self, data):
+        """
+        Normalize React FormData keys:
+        - If frontend sends images_upload[] instead of images_upload,
+          remap it so DRF ListField sees the correct key.
+        """
+        if hasattr(data, "getlist") and "images_upload[]" in data:
+            data = data.copy()  # QueryDict is immutable by default
+            data.setlist("images_upload", data.getlist("images_upload[]"))
+        if "images_delete[]" in data:
+                data.setlist("images_delete", data.getlist("images_delete[]"))
+        return super().to_internal_value(data)
+
+    # -------- CREATE --------
     def create(self, validated_data):
         spec_data = validated_data.pop("specification", None)
-        instance = DroneImage.objects.create(**validated_data)
+        extra_images = validated_data.pop("images_upload", [])
+        validated_data.pop("images_delete", None)
+
+        # spec_data is already a dict thanks to SpecificationSerializer
         if spec_data is not None:
-            instance.specification = spec_data
-            instance.save()
+            validated_data["specification"] = spec_data
+
+        instance = DroneImage.objects.create(**validated_data)
+
+        # Save extra images
+        for img in extra_images:
+            DroneExtraImage.objects.create(drone=instance, image=img)
+
         return instance
 
+    # -------- UPDATE --------
     def update(self, instance, validated_data):
         spec_data = validated_data.pop("specification", None)
+        extra_images = validated_data.pop("images_upload", [])
+        images_to_delete = validated_data.pop("images_delete", [])
+
+        # Overwrite specification completely with new dict
         if spec_data is not None:
+            # Already dict from SpecificationSerializer, no need for json.loads
             instance.specification = spec_data
+
+        # Update other simple fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+
         instance.save()
+
+        for img_id in images_to_delete:
+            try:
+                img_obj = instance.images.get(id=img_id)
+                img_obj.delete()  # removes file + DB record
+            except DroneExtraImage.DoesNotExist:
+                pass
+
+        # Append new extra images (existing ones remain)
+        for img in extra_images:
+            DroneExtraImage.objects.create(drone=instance, image=img)
+
         return instance
