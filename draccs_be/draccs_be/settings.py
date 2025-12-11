@@ -87,7 +87,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'dracss',
         'USER': 'root',              
-        'PASSWORD': 'Lokicu.14',              
+        'PASSWORD': 'mysql',              
         'HOST': 'localhost',
         'PORT': '3306',
         'OPTIONS': {

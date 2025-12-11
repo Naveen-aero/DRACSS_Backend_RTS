@@ -2,24 +2,26 @@ from django.urls import path
 from .views import (
     DroneImageListCreateView,
     DroneImageRetrieveUpdateDestroyView,
-    DroneExtraImageDestroyView,
+    DroneExtraImageRetrieveDestroyView,
 )
 
 urlpatterns = [
-    # List + Create
-    path("drone_images/", DroneImageListCreateView.as_view(), name="drone-images"),
+    # List all drones / create new
+    path("drone_images/", DroneImageListCreateView.as_view(), name="droneimage-list-create"),
 
-    # Retrieve + Update + Delete (whole drone record)
+    # Single drone: GET, PUT/PATCH, DELETE
     path(
         "drone_images/<int:pk>/",
         DroneImageRetrieveUpdateDestroyView.as_view(),
-        name="drone-image-detail",
+        name="droneimage-detail",
     ),
 
-    # Delete a SINGLE extra image (by its id in images[])
+    # Single extra image for a given drone:
+    # e.g. /api/drone_images/1/images/3/
     path(
-        "drone_images/extra/<int:pk>/",
-        DroneExtraImageDestroyView.as_view(),
-        name="drone-extra-image-destroy",
+        "drone_images/<int:drone_id>/images/<int:pk>/",
+        DroneExtraImageRetrieveDestroyView.as_view(),
+        name="droneextraimage-detail",
     ),
 ]
+

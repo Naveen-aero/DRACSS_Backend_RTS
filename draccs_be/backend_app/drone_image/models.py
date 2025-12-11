@@ -68,7 +68,6 @@
 #             self.image.delete(save=False)  # remove file from /media/...
 #         super().delete(*args, **kwargs)
 
-
 from django.db import models
 
 
@@ -138,3 +137,6 @@ class DroneExtraImage(models.Model):
         if self.image:
             self.image.delete(save=False)  # remove file from /media/...
         super().delete(*args, **kwargs)
+
+    class Meta:  #  add this
+        db_table = "drone_image_droneextraimage"

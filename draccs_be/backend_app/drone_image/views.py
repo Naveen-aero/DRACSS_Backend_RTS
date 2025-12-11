@@ -39,6 +39,7 @@
 #         drone_id = self.kwargs["drone_pk"]
 #         return DroneExtraImage.objects.filter(drone_id=drone_id)
 
+
 from rest_framework import generics
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
@@ -47,31 +48,26 @@ from .serializers import DroneImageSerializer, DroneExtraImageSerializer
 
 
 class DroneImageListCreateView(generics.ListCreateAPIView):
-    """
-    GET  /api/drone_images/      -> list all drone images
-    POST /api/drone_images/      -> create new drone image (with image, spec, videos, extra images)
-    """
     queryset = DroneImage.objects.all()
     serializer_class = DroneImageSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 
 class DroneImageRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    GET    /api/drone_images/<id>/ -> retrieve one
-    PUT    /api/drone_images/<id>/ -> full update
-    PATCH  /api/drone_images/<id>/ -> partial update
-    DELETE /api/drone_images/<id>/ -> delete record + all files
-    """
     queryset = DroneImage.objects.all()
     serializer_class = DroneImageSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 
-class DroneExtraImageDestroyView(generics.DestroyAPIView):
+class DroneExtraImageRetrieveDestroyView(generics.RetrieveDestroyAPIView):
     """
-    DELETE /api/drone_images/extra/<id>/ -> delete a single extra image
+    Handle a single extra image for a specific DroneImage:
+    GET    /api/drone_images/<drone_id>/images/<pk>/
+    DELETE /api/drone_images/<drone_id>/images/<pk>/
     """
-    queryset = DroneExtraImage.objects.all()
     serializer_class = DroneExtraImageSerializer
-    # default parsers are fine for DELETE; no need for MultiPartParser here
+
+    def get_queryset(self):
+        # Only allow images that belong to the given drone_id
+        drone_id = self.kwargs["drone_id"]
+        return DroneExtraImage.objects.filter(drone_id=drone_id)
