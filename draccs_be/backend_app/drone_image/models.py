@@ -68,17 +68,13 @@
 #             self.image.delete(save=False)  # remove file from /media/...
 #         super().delete(*args, **kwargs)
 
-#     class Meta:  #  add this
-#         db_table = "drone_image_droneextraimage"
-
-
 from django.db import models
 
 
 class DroneImage(models.Model):
     name = models.CharField(max_length=255)
 
-    # Optional "main" image
+    # Optional main image
     image = models.ImageField(
         upload_to="drone_images/",
         blank=True,
@@ -88,60 +84,26 @@ class DroneImage(models.Model):
     # Specifications stored as JSON
     specification = models.JSONField(default=dict, blank=True)
 
-    # OLD single video fields (you can keep these if you want backward compatibility,
-    # but we will NOT expose them in the serializer anymore)
-    tutorial_video = models.FileField(
-        upload_to="drone_videos/tutorials/",
-        blank=True,
-        null=True,
-    )
-    troubleshooting_video = models.FileField(
-        upload_to="drone_videos/troubleshooting/",
-        blank=True,
-        null=True,
-    )
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
 
-    # ensure files are removed from disk when deleting the whole drone
     def delete(self, *args, **kwargs):
         # delete main image
         if self.image:
             self.image.delete(save=False)
-        # delete videos
-        if self.tutorial_video:
-            self.tutorial_video.delete(save=False)
-        if self.troubleshooting_video:
-            self.troubleshooting_video.delete(save=False)
-        # delete all extra images
-        for img in self.images.all():
-            if img.image:
-                img.image.delete(save=False)
-        # delete all tutorial videos
-        for vid in self.tutorial_videos.all():
-            if vid.video:
-                vid.video.delete(save=False)
-        # delete all troubleshooting videos
-        for vid in self.troubleshooting_videos.all():
-            if vid.video:
-                vid.video.delete(save=False)
-
+        # cascade will delete related rows; their delete() will remove files
         super().delete(*args, **kwargs)
-
-    class Meta:
-        db_table = "drone_image_droneimage"
 
 
 class DroneExtraImage(models.Model):
     """
-    Extra images for a DroneImage (one DroneImage -> many DroneExtraImage)
+    Extra images for a DroneImage (one DroneImage -> many extra images)
     """
     drone = models.ForeignKey(
         DroneImage,
-        related_name="images",          # access via drone.images.all()
+        related_name="images",      # appears as "images": [] in DroneImageSerializer
         on_delete=models.CASCADE,
     )
     image = models.ImageField(upload_to="drone_images/multiple/")
@@ -149,19 +111,35 @@ class DroneExtraImage(models.Model):
     def __str__(self):
         return f"{self.drone.name} - extra image {self.id}"
 
-    # allow deleting a single extra image (file + DB row)
     def delete(self, *args, **kwargs):
         if self.image:
-            self.image.delete(save=False)  # remove file from /media/...
+            self.image.delete(save=False)
         super().delete(*args, **kwargs)
 
-    class Meta:
-        db_table = "drone_image_droneextraimage"
+
+class DroneAttachment(models.Model):
+    """
+    Generic file attachments for a DroneImage
+    """
+    drone = models.ForeignKey(
+        DroneImage,
+        related_name="attachments",
+        on_delete=models.CASCADE,
+    )
+    file = models.FileField(upload_to="drone_attachments/")
+
+    def __str__(self):
+        return f"{self.drone.name} - attachment {self.id}"
+
+    def delete(self, *args, **kwargs):
+        if self.file:
+            self.file.delete(save=False)
+        super().delete(*args, **kwargs)
 
 
 class DroneTutorialVideo(models.Model):
     """
-    Multiple tutorial videos for a DroneImage
+    Tutorial videos for a DroneImage
     """
     drone = models.ForeignKey(
         DroneImage,
@@ -178,13 +156,10 @@ class DroneTutorialVideo(models.Model):
             self.video.delete(save=False)
         super().delete(*args, **kwargs)
 
-    class Meta:
-        db_table = "drone_image_dronetutorialvideo"
-
 
 class DroneTroubleshootingVideo(models.Model):
     """
-    Multiple troubleshooting videos for a DroneImage
+    Troubleshooting videos for a DroneImage
     """
     drone = models.ForeignKey(
         DroneImage,
@@ -200,6 +175,3 @@ class DroneTroubleshootingVideo(models.Model):
         if self.video:
             self.video.delete(save=False)
         super().delete(*args, **kwargs)
-
-    class Meta:
-        db_table = "drone_image_dronetroubleshootingvideo"

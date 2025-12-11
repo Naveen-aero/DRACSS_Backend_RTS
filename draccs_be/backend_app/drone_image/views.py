@@ -6,49 +6,58 @@
 
 
 # class DroneImageListCreateView(generics.ListCreateAPIView):
+#     """
+#     GET  /api/drone_images/      -> list all drone images
+#     POST /api/drone_images/      -> create new drone image
+#     """
 #     queryset = DroneImage.objects.all()
 #     serializer_class = DroneImageSerializer
 #     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 
 # class DroneImageRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+#     """
+#     GET    /api/drone_images/<id>/ -> retrieve one
+#     PUT    /api/drone_images/<id>/ -> full update
+#     PATCH  /api/drone_images/<id>/ -> partial update
+#     DELETE /api/drone_images/<id>/ -> delete record + all files
+#     """
 #     queryset = DroneImage.objects.all()
 #     serializer_class = DroneImageSerializer
 #     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 
-# class DroneExtraImageRetrieveDestroyView(generics.RetrieveDestroyAPIView):
+# class DroneExtraImageDestroyView(generics.DestroyAPIView):
 #     """
-#     Handle a single extra image for a specific DroneImage:
-#     GET    /api/drone_images/<drone_id>/images/<pk>/
-#     DELETE /api/drone_images/<drone_id>/images/<pk>/
+#     DELETE /api/drone_images/<drone_pk>/images/<pk>/
+#     -> delete a single extra image that belongs to that drone
 #     """
 #     serializer_class = DroneExtraImageSerializer
 
 #     def get_queryset(self):
-#         # Only allow images that belong to the given drone_id
-#         drone_id = self.kwargs["drone_id"]
+#         # Only allow deleting images attached to this specific drone
+#         drone_id = self.kwargs["drone_pk"]
 #         return DroneExtraImage.objects.filter(drone_id=drone_id)
-
-from django.shortcuts import get_object_or_404
-
-from rest_framework import generics, status
+from rest_framework import generics
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from rest_framework.response import Response
 
 from .models import (
     DroneImage,
     DroneExtraImage,
+    DroneAttachment,
     DroneTutorialVideo,
     DroneTroubleshootingVideo,
 )
 from .serializers import (
     DroneImageSerializer,
     DroneExtraImageSerializer,
+    DroneAttachmentSerializer,
     DroneTutorialVideoSerializer,
     DroneTroubleshootingVideoSerializer,
 )
 
+
+# ---------- DRONE MASTER ----------
 
 class DroneImageListCreateView(generics.ListCreateAPIView):
     queryset = DroneImage.objects.all()
@@ -62,104 +71,105 @@ class DroneImageRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 
-class DroneExtraImageRetrieveDestroyView(generics.RetrieveDestroyAPIView):
+# ---------- EXTRA IMAGES ----------
+
+class DroneExtraImageListCreateView(generics.ListCreateAPIView):
     """
-    Handle a single extra image for a specific DroneImage:
-    GET    /api/drone_images/<drone_id>/images/<pk>/
-    DELETE /api/drone_images/<drone_id>/images/<pk>/
+    POST /api/drone_extra_images/
+      - form-data:
+         - drone: <drone_id>
+         - image: <file>
+    GET /api/drone_extra_images/?drone=<id>  (filter by drone)
     """
     serializer_class = DroneExtraImageSerializer
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
-        drone_id = self.kwargs["drone_id"]
-        return DroneExtraImage.objects.filter(drone_id=drone_id)
+        qs = DroneExtraImage.objects.all()
+        drone_id = self.request.query_params.get("drone")
+        if drone_id:
+            qs = qs.filter(drone_id=drone_id)
+        return qs
+
+
+class DroneExtraImageRetrieveDestroyView(generics.RetrieveDestroyAPIView):
+    queryset = DroneExtraImage.objects.all()
+    serializer_class = DroneExtraImageSerializer
+
+
+# ---------- ATTACHMENTS ----------
+
+class DroneAttachmentListCreateView(generics.ListCreateAPIView):
+    """
+    POST /api/drone_attachments/
+      - form-data:
+         - drone: <drone_id>
+         - file: <file>
+    GET /api/drone_attachments/?drone=<id>
+    """
+    serializer_class = DroneAttachmentSerializer
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        qs = DroneAttachment.objects.all()
+        drone_id = self.request.query_params.get("drone")
+        if drone_id:
+            qs = qs.filter(drone_id=drone_id)
+        return qs
+
+
+class DroneAttachmentRetrieveDestroyView(generics.RetrieveDestroyAPIView):
+    queryset = DroneAttachment.objects.all()
+    serializer_class = DroneAttachmentSerializer
+
+
+# ---------- TUTORIAL VIDEOS ----------
+
+class DroneTutorialVideoListCreateView(generics.ListCreateAPIView):
+    """
+    POST /api/drone_tutorial_videos/
+      - form-data:
+         - drone: <drone_id>
+         - video: <file>
+    GET /api/drone_tutorial_videos/?drone=<id>
+    """
+    serializer_class = DroneTutorialVideoSerializer
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        qs = DroneTutorialVideo.objects.all()
+        drone_id = self.request.query_params.get("drone")
+        if drone_id:
+            qs = qs.filter(drone_id=drone_id)
+        return qs
 
 
 class DroneTutorialVideoRetrieveDestroyView(generics.RetrieveDestroyAPIView):
-    """
-    Single tutorial video for a specific DroneImage:
-    GET    /api/drone_images/<drone_id>/tutorial_videos/<pk>/
-    DELETE /api/drone_images/<drone_id>/tutorial_videos/<pk>/
-    """
+    queryset = DroneTutorialVideo.objects.all()
     serializer_class = DroneTutorialVideoSerializer
 
+
+# ---------- TROUBLESHOOTING VIDEOS ----------
+
+class DroneTroubleshootingVideoListCreateView(generics.ListCreateAPIView):
+    """
+    POST /api/drone_troubleshooting_videos/
+      - form-data:
+         - drone: <drone_id>
+         - video: <file>
+    GET /api/drone_troubleshooting_videos/?drone=<id>
+    """
+    serializer_class = DroneTroubleshootingVideoSerializer
+    parser_classes = [MultiPartParser, FormParser]
+
     def get_queryset(self):
-        drone_id = self.kwargs["drone_id"]
-        return DroneTutorialVideo.objects.filter(drone_id=drone_id)
+        qs = DroneTroubleshootingVideo.objects.all()
+        drone_id = self.request.query_params.get("drone")
+        if drone_id:
+            qs = qs.filter(drone_id=drone_id)
+        return qs
 
 
 class DroneTroubleshootingVideoRetrieveDestroyView(generics.RetrieveDestroyAPIView):
-    """
-    Single troubleshooting video for a specific DroneImage:
-    GET    /api/drone_images/<drone_id>/troubleshooting_videos/<pk>/
-    DELETE /api/drone_images/<drone_id>/troubleshooting_videos/<pk>/
-    """
+    queryset = DroneTroubleshootingVideo.objects.all()
     serializer_class = DroneTroubleshootingVideoSerializer
-
-    def get_queryset(self):
-        drone_id = self.kwargs["drone_id"]
-        return DroneTroubleshootingVideo.objects.filter(drone_id=drone_id)
-
-
-# ---------- NEW: UPLOAD MULTIPLE TUTORIAL VIDEOS FOR ONE DRONE ----------
-
-class TutorialVideoUploadView(generics.CreateAPIView):
-    """
-    POST /api/drone_images/<pk>/tutorial/
-    - Field name for files: "videos" (can be multiple)
-    """
-    serializer_class = DroneTutorialVideoSerializer
-    parser_classes = [MultiPartParser, FormParser]
-
-    def post(self, request, pk, *args, **kwargs):
-        # Ensure parent drone exists
-        drone = get_object_or_404(DroneImage, pk=pk)
-
-        # Expect multiple files under key "videos"
-        files = request.FILES.getlist("videos")
-        if not files:
-            return Response(
-                {"detail": "No files found under 'videos'."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        created_objects = []
-        for f in files:
-            obj = DroneTutorialVideo.objects.create(drone=drone, video=f)
-            created_objects.append(obj)
-
-        # Serialize and return all created videos
-        serializer = self.get_serializer(created_objects, many=True)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-
-# ---------- NEW: UPLOAD MULTIPLE TROUBLESHOOTING VIDEOS FOR ONE DRONE ----------
-
-class TroubleshootingVideoUploadView(generics.CreateAPIView):
-    """
-    POST /api/drone_images/<pk>/troubleshooting/
-    - Field name for files: "videos" (can be multiple)
-    """
-    serializer_class = DroneTroubleshootingVideoSerializer
-    parser_classes = [MultiPartParser, FormParser]
-
-    def post(self, request, pk, *args, **kwargs):
-        # Ensure parent drone exists
-        drone = get_object_or_404(DroneImage, pk=pk)
-
-        # Expect multiple files under key "videos"
-        files = request.FILES.getlist("videos")
-        if not files:
-            return Response(
-                {"detail": "No files found under 'videos'."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        created_objects = []
-        for f in files:
-            obj = DroneTroubleshootingVideo.objects.create(drone=drone, video=f)
-            created_objects.append(obj)
-
-        # Serialize and return all created videos
-        serializer = self.get_serializer(created_objects, many=True)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
