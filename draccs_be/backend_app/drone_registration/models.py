@@ -56,7 +56,6 @@
 #         return f"{self.model_name} / {self.uin_number}"
 
 
-
 from django.db import models
 
 
@@ -103,7 +102,7 @@ class DroneRegistration(models.Model):
         ),
     )
 
-    # 🔹 registered: now tri-state: None (not decided), True, False
+    #  registered: tri-state: None (not decided), True, False
     registered = models.BooleanField(
         null=True,
         blank=True,
@@ -111,14 +110,20 @@ class DroneRegistration(models.Model):
         help_text="None = not decided yet, True = registered, False = not registered",
     )
 
-    # 🔹 new field: remarks
+    #  remarks (mandatory when registered == False OR is_active == False — enforce in serializer)
     remarks = models.TextField(
         null=True,
         blank=True,
-        help_text="Mandatory if registered is False",
+        help_text="Mandatory if registered is False (and also when is_active is False, as per serializer rule)",
     )
 
-    is_active = models.BooleanField(default=True)
+    # CHANGED: is_active is now tri-state (None first)
+    is_active = models.BooleanField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text="None = not decided yet, True = active, False = inactive",
+    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)

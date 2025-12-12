@@ -230,9 +230,7 @@ class ClientEntrySerializer(serializers.Serializer):
     )
 
     # allow any JSON type (string / list / dict / null)
-    attachment = serializers.JSONField(
-        required=False, allow_null=True
-    )
+    attachment = serializers.JSONField(required=False, allow_null=True)
 
 
 class DroneRegistrationSerializer(serializers.ModelSerializer):
@@ -262,7 +260,7 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
             "attachment",   # top-level FileField
             "image",
             "registered",
-            "remarks",      #  expose remarks
+            "remarks",
             "is_active",
             "created_at",
             "updated_at",
@@ -283,27 +281,23 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         if not client_entries:
             return client_entries or []
 
-        # If there is no UIN, just return as-is (nothing to prefix with)
         if not uin_number:
             return [dict(entry) for entry in client_entries]
 
         normalized = []
         for entry in client_entries:
-            entry = dict(entry)  # make a copy to avoid mutating in-place
+            entry = dict(entry)
             att = entry.get("attachment")
 
-            # Treat empty dict/list as no attachment
             if isinstance(att, dict) and not att:
                 att = None
             if isinstance(att, list) and not att:
                 att = None
 
             if att is not None:
-                # If it is a list, take first element
                 if isinstance(att, list):
                     att = att[0] if att else ""
 
-                # If it's a dict, try common keys like 'name' or 'filename'
                 if isinstance(att, dict):
                     if "name" in att:
                         att = att["name"]
@@ -312,19 +306,16 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
                     else:
                         att = str(att)
 
-                # If it's some other type (file object / int / etc), cast to string
                 if not isinstance(att, str):
                     att = str(att)
 
                 if att:
-                    # If already a URL, keep it
                     if att.startswith("http://") or att.startswith("https://"):
                         entry["attachment"] = att
-                    # If no slash in value, treat it as a simple filename
                     elif "/" not in att and "\\" not in att:
                         entry["attachment"] = f"drone_attachments/{uin_number}/{att}"
                     else:
-                        entry["attachment"] = att  # already a path
+                        entry["attachment"] = att
                 else:
                     entry["attachment"] = None
             else:
@@ -347,29 +338,41 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("drone_id must be unique.")
         return value
 
-    #  Global validation: if registered == False, remarks is required
+    # --------------------------------------------------
+    # ✅ Global validation rules (CREATE + UPDATE)
+    # --------------------------------------------------
     def validate(self, attrs):
-        is_create = self.instance is None 
-        # Handle create + update (use instance values as fallback)
+        is_create = self.instance is None
+
+        # Fallback to instance values for PATCH
         registered = attrs.get("registered", getattr(self.instance, "registered", None))
+        is_active = attrs.get("is_active", getattr(self.instance, "is_active", None))
         remarks = attrs.get("remarks", getattr(self.instance, "remarks", None))
 
+        # ✅ CREATE: registered & is_active must start as NULL/empty
         if is_create:
             if "registered" in attrs and attrs.get("registered") is not None:
                 raise serializers.ValidationError({
                     "registered": "On creation, 'registered' must be null/empty. Update later to true/false."
                 })
 
-            # (Optional but recommended) keep remarks empty on create
-            if "remarks" in attrs and attrs.get("remarks") not in (None, "", " "):
+            if "is_active" in attrs and attrs.get("is_active") is not None:
                 raise serializers.ValidationError({
-                    "remarks": "On creation, keep 'remarks' empty. Remarks is required only when registered is set to false."
+                    "is_active": "On creation, 'is_active' must be null/empty. Update later to true/false."
                 })
 
-        if registered is False and (remarks is None or str(remarks).strip() == ""):
-            raise serializers.ValidationError({
-                "remarks": "Remarks is required when 'registered' is false."
-            })
+            # Optional: keep remarks empty on create
+            if "remarks" in attrs and (attrs.get("remarks") is not None) and str(attrs.get("remarks")).strip() != "":
+                raise serializers.ValidationError({
+                    "remarks": "On creation, keep 'remarks' empty. Remarks is required only when registered/is_active is set to false."
+                })
+
+        # ✅ If registered == False OR is_active == False -> remarks mandatory
+        if (registered is False) or (is_active is False):
+            if remarks is None or str(remarks).strip() == "":
+                raise serializers.ValidationError({
+                    "remarks": "Remarks is required when 'registered' is false OR 'is_active' is false."
+                })
 
         return attrs
 
@@ -389,11 +392,14 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         """
         On update:
-        - If client_details is provided and some entries have no attachment,
-          we can still normalize any attachments that are provided.
+        - If client_details provided: normalize attachments.
+        - Optional: clear remarks automatically when BOTH flags become True.
         """
-        if "registered" in validated_data and validated_data["registered"] is True:
-            if "remarks" not in validated_data:
+        # ✅ Optional auto-clear: if BOTH become True and user didn't send remarks, clear it
+        if "remarks" not in validated_data:
+            new_registered = validated_data.get("registered", instance.registered)
+            new_is_active = validated_data.get("is_active", instance.is_active)
+            if new_registered is True and new_is_active is True:
                 validated_data["remarks"] = None
 
         if "client_details" in validated_data:
@@ -408,28 +414,18 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
     # Read / Output
     # --------------------------------------------------
     def to_representation(self, instance):
-        """
-        When returning data:
-        - client_details already contains normalized attachment paths
-        - Only auto-fill drone_type from parent if missing
-        - Mirror top-level attachment URL into each client[].attachment
-          if top-level attachment exists.
-        """
         data = super().to_representation(instance)
 
         parent_drone_type = data.get("drone_type")
-        top_attachment = data.get("attachment")  # e.g. full URL from FileField
+        top_attachment = data.get("attachment")
 
         client_entries = data.get("client") or []
         enriched_clients = []
 
         for entry in client_entries:
             entry = dict(entry)
-
-            # Only set drone_type if missing; do not overwrite if already present
             entry.setdefault("drone_type", parent_drone_type)
 
-            # key line: if we have a top-level attachment URL, reuse it for the client
             if top_attachment:
                 entry["attachment"] = top_attachment
 
