@@ -339,7 +339,7 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         return value
 
     # --------------------------------------------------
-    # ✅ Global validation rules (CREATE + UPDATE)
+    #  Global validation rules (CREATE + UPDATE)
     # --------------------------------------------------
     def validate(self, attrs):
         is_create = self.instance is None
@@ -349,7 +349,7 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         is_active = attrs.get("is_active", getattr(self.instance, "is_active", None))
         remarks = attrs.get("remarks", getattr(self.instance, "remarks", None))
 
-        # ✅ CREATE: registered & is_active must start as NULL/empty
+        #  CREATE: registered & is_active must start as NULL/empty
         if is_create:
             if "registered" in attrs and attrs.get("registered") is not None:
                 raise serializers.ValidationError({
@@ -395,7 +395,7 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         - If client_details provided: normalize attachments.
         - Optional: clear remarks automatically when BOTH flags become True.
         """
-        # ✅ Optional auto-clear: if BOTH become True and user didn't send remarks, clear it
+        #  Optional auto-clear: if BOTH become True and user didn't send remarks, clear it
         if "remarks" not in validated_data:
             new_registered = validated_data.get("registered", instance.registered)
             new_is_active = validated_data.get("is_active", instance.is_active)
