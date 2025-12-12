@@ -262,7 +262,7 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
             "attachment",   # top-level FileField
             "image",
             "registered",
-            "remarks",      # 🔹 expose remarks
+            "remarks",      #  expose remarks
             "is_active",
             "created_at",
             "updated_at",
@@ -347,11 +347,24 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("drone_id must be unique.")
         return value
 
-    # 🔹 Global validation: if registered == False, remarks is required
+    #  Global validation: if registered == False, remarks is required
     def validate(self, attrs):
+        is_create = self.instance is None 
         # Handle create + update (use instance values as fallback)
         registered = attrs.get("registered", getattr(self.instance, "registered", None))
         remarks = attrs.get("remarks", getattr(self.instance, "remarks", None))
+
+        if is_create:
+            if "registered" in attrs and attrs.get("registered") is not None:
+                raise serializers.ValidationError({
+                    "registered": "On creation, 'registered' must be null/empty. Update later to true/false."
+                })
+
+            # (Optional but recommended) keep remarks empty on create
+            if "remarks" in attrs and attrs.get("remarks") not in (None, "", " "):
+                raise serializers.ValidationError({
+                    "remarks": "On creation, keep 'remarks' empty. Remarks is required only when registered is set to false."
+                })
 
         if registered is False and (remarks is None or str(remarks).strip() == ""):
             raise serializers.ValidationError({
@@ -379,6 +392,10 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         - If client_details is provided and some entries have no attachment,
           we can still normalize any attachments that are provided.
         """
+        if "registered" in validated_data and validated_data["registered"] is True:
+            if "remarks" not in validated_data:
+                validated_data["remarks"] = None
+
         if "client_details" in validated_data:
             client_entries = validated_data.get("client_details") or []
             uin_number = validated_data.get("uin_number", instance.uin_number)
