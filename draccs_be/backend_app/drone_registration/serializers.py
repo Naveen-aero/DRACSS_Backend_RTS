@@ -202,7 +202,6 @@
 #         data["client"] = enriched_clients
 #         return data
 
-
 from rest_framework import serializers
 from .models import DroneRegistration
 
@@ -345,33 +344,30 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         is_create = self.instance is None
 
         # Fallback to instance values for PATCH
-        registered = attrs.get("registered", getattr(self.instance, "registered", None))
         is_active = attrs.get("is_active", getattr(self.instance, "is_active", None))
         remarks = attrs.get("remarks", getattr(self.instance, "remarks", None))
 
-        #  CREATE: registered & is_active must start as NULL/empty
+        #  CREATE rules:
+        # - DO NOT validate/deny "registered" here
+        #   because Browsable API HTML form may send it automatically.
+        # - is_active must start NULL
         if is_create:
-            if "registered" in attrs and attrs.get("registered") is not None:
-                raise serializers.ValidationError({
-                    "registered": "On creation, 'registered' must be null/empty. Update later to true/false."
-                })
-
             if "is_active" in attrs and attrs.get("is_active") is not None:
                 raise serializers.ValidationError({
                     "is_active": "On creation, 'is_active' must be null/empty. Update later to true/false."
                 })
 
             # Optional: keep remarks empty on create
-            if "remarks" in attrs and (attrs.get("remarks") is not None) and str(attrs.get("remarks")).strip() != "":
+            if "remarks" in attrs and str(attrs.get("remarks") or "").strip() != "":
                 raise serializers.ValidationError({
-                    "remarks": "On creation, keep 'remarks' empty. Remarks is required only when registered/is_active is set to false."
+                    "remarks": "On creation, keep 'remarks' empty. Remarks is required only when is_active is set to false."
                 })
 
-        # ✅ If registered == False OR is_active == False -> remarks mandatory
-        if (registered is False) or (is_active is False):
+        # remarks required ONLY when is_active == False
+        if is_active is False:
             if remarks is None or str(remarks).strip() == "":
                 raise serializers.ValidationError({
-                    "remarks": "Remarks is required when 'registered' is false OR 'is_active' is false."
+                    "remarks": "Remarks is required when 'is_active' is false."
                 })
 
         return attrs
@@ -380,11 +376,18 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
     # Create / Update (write side)
     # --------------------------------------------------
     def create(self, validated_data):
+        #  IMPORTANT: Browsable API may send registered;
+        # ignore it and force False always on create
+        validated_data.pop("registered", None)
+
         client_entries = validated_data.pop("client_details", [])
         uin_number = validated_data.get("uin_number")
 
         client_entries = self._normalize_client_attachments(uin_number, client_entries)
         validated_data["client_details"] = client_entries
+
+        #  FORCE registered = False on CREATE
+        validated_data["registered"] = False
 
         instance = super().create(validated_data)
         return instance
@@ -393,13 +396,12 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         """
         On update:
         - If client_details provided: normalize attachments.
-        - Optional: clear remarks automatically when BOTH flags become True.
+        - Optional: clear remarks automatically when is_active becomes True and user didn't send remarks.
         """
-        #  Optional auto-clear: if BOTH become True and user didn't send remarks, clear it
+        # Optional: if user sets is_active True and doesn't send remarks, clear it
         if "remarks" not in validated_data:
-            new_registered = validated_data.get("registered", instance.registered)
             new_is_active = validated_data.get("is_active", instance.is_active)
-            if new_registered is True and new_is_active is True:
+            if new_is_active is True:
                 validated_data["remarks"] = None
 
         if "client_details" in validated_data:
