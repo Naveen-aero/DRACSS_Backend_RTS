@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'backend_app.orderform.apps.OrderformConfig', 
     'backend_app.client.apps.ClientConfig',
     'backend_app.drone_image',
+    # 'backend_app.online_support',
 ]
 
 MIDDLEWARE = [
@@ -143,3 +144,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "rest_framework.schemas.openapi.AutoSchema",
+}
