@@ -439,6 +439,187 @@
 #         data["client"] = enriched_clients
 #         return data
 
+
+# import json
+# from django.conf import settings
+# from django.core.files.storage import default_storage
+# from django.utils.text import get_valid_filename
+# from rest_framework import serializers
+# from .models import DroneRegistration
+
+
+# class ClientEntrySerializer(serializers.Serializer):
+#     model_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+#     drone_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+#     uin_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+#     drone_serial_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+#     flight_controller_serial_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+#     remote_controller = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+#     battery_charger_serial_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+#     battery_serial_number_1 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+#     battery_serial_number_2 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+#     # Accept string / {} / [] / null from frontend
+#     attachment = serializers.JSONField(required=False, allow_null=True)
+
+#     def validate_attachment(self, value):
+#         # Normalize empty-ish values into None
+#         if value in ({}, [], "", None):
+#             return None
+
+#         if isinstance(value, str):
+#             v = value.strip()
+#             return v if v else None
+
+#         if isinstance(value, list):
+#             if not value:
+#                 return None
+#             first = value[0]
+#             if isinstance(first, str):
+#                 first = first.strip()
+#                 return first if first else None
+#             return None
+
+#         if isinstance(value, dict):
+#             for k in ("url", "path", "name", "filename"):
+#                 v = value.get(k)
+#                 if isinstance(v, str):
+#                     v = v.strip()
+#                     return v if v else None
+#             return None
+
+#         return None
+
+
+# class DroneRegistrationSerializer(serializers.ModelSerializer):
+#     client = ClientEntrySerializer(many=True, source="client_details", required=False, allow_null=True)
+
+#     class Meta:
+#         model = DroneRegistration
+#         fields = [
+#             "id", "model_name", "drone_type", "manufacturer",
+#             "uin_number", "drone_serial_number", "drone_id",
+#             "flight_controller_serial_number", "remote_controller",
+#             "battery_charger_serial_number", "battery_serial_number_1", "battery_serial_number_2",
+#             "attachment", "image",
+#             "registered", "remarks", "is_active",
+#             "created_at", "updated_at",
+#             "client",
+#         ]
+#         read_only_fields = ["id", "created_at", "updated_at"]
+
+#     # -------------------------------------------------------
+#     # IMPORTANT: parse multipart "client" JSON string -> list
+#     # -------------------------------------------------------
+#     def to_internal_value(self, data):
+#         # When data is QueryDict (multipart/form-data), "client" arrives as string
+#         client_val = data.get("client", None)
+#         if isinstance(client_val, str):
+#             try:
+#                 parsed = json.loads(client_val)
+#                 data = data.copy()
+#                 data["client"] = parsed
+#             except Exception:
+#                 pass
+#         return super().to_internal_value(data)
+
+#     # -------------------------------------------------------
+#     # Save client attachment files from multipart request.FILES
+#     # -------------------------------------------------------
+#     def _save_client_attachment_files(self, parent_uin, client_entries):
+#         """
+#         Accept nested uploads:
+#           client_0_attachment, client_1_attachment, ...
+#         Save to: drone_attachments/<uin>/<filename>
+#         Store RELATIVE PATH in JSON (ex: drone_attachments/123/buzzer.jpg)
+
+#         NOTE: Uses client entry uin_number if available, else parent_uin.
+#         """
+#         request = self.context.get("request")
+#         if not request or not hasattr(request, "FILES"):
+#             return client_entries or []
+
+#         client_entries = client_entries or []
+#         updated = []
+
+#         for idx, entry in enumerate(client_entries):
+#             entry = dict(entry or {})
+
+#             uin = entry.get("uin_number") or parent_uin
+#             if not uin:
+#                 updated.append(entry)
+#                 continue
+
+#             f = request.FILES.get(f"client_{idx}_attachment")
+#             if f:
+#                 filename = get_valid_filename(f.name)
+#                 save_path = f"drone_attachments/{uin}/{filename}"
+#                 saved_path = default_storage.save(save_path, f)
+#                 entry["attachment"] = saved_path  # store relative path
+
+#             updated.append(entry)
+
+#         return updated
+
+#     # -------------------------------------------------------
+#     # Create / Update
+#     # -------------------------------------------------------
+#     def create(self, validated_data):
+#         validated_data.pop("registered", None)
+
+#         client_entries = validated_data.pop("client_details", []) or []
+#         parent_uin = validated_data.get("uin_number")
+
+#         client_entries = self._save_client_attachment_files(parent_uin, client_entries)
+#         validated_data["client_details"] = client_entries
+
+#         validated_data["registered"] = False
+#         return super().create(validated_data)
+
+#     def update(self, instance, validated_data):
+#         if "client_details" in validated_data:
+#             client_entries = validated_data.get("client_details") or []
+#             parent_uin = validated_data.get("uin_number", instance.uin_number)
+
+#             client_entries = self._save_client_attachment_files(parent_uin, client_entries)
+#             validated_data["client_details"] = client_entries
+
+#         return super().update(instance, validated_data)
+
+#     # -------------------------------------------------------
+#     # Read: convert relative client attachment -> full URL
+#     # -------------------------------------------------------
+#     def to_representation(self, instance):
+#         data = super().to_representation(instance)
+
+#         parent_drone_type = data.get("drone_type")
+#         request = self.context.get("request")
+#         media_url = getattr(settings, "MEDIA_URL", "/media/")
+
+#         client_entries = data.get("client") or []
+#         enriched = []
+
+#         for entry in client_entries:
+#             entry = dict(entry or {})
+
+#             if not entry.get("drone_type"):
+#                 entry["drone_type"] = parent_drone_type
+
+#             att = entry.get("attachment")
+#             if att and isinstance(att, str) and not att.startswith("http"):
+#                 rel = att.lstrip("/")
+#                 url = f"{media_url.rstrip('/')}/{rel}"
+#                 entry["attachment"] = request.build_absolute_uri(url) if request else url
+
+#             # DO NOT fallback from parent attachment (keep separate)
+#             enriched.append(entry)
+
+#         data["client"] = enriched
+#         return data
+
+
+import json
+from django.conf import settings
 from django.core.files.storage import default_storage
 from django.utils.text import get_valid_filename
 from rest_framework import serializers
@@ -456,15 +637,17 @@ class ClientEntrySerializer(serializers.Serializer):
     battery_serial_number_1 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     battery_serial_number_2 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
-    #  accept string / {} / [] / null from frontend
+    # Accept string / {} / [] / null from frontend
     attachment = serializers.JSONField(required=False, allow_null=True)
 
     def validate_attachment(self, value):
         if value in ({}, [], "", None):
             return None
+
         if isinstance(value, str):
             v = value.strip()
             return v if v else None
+
         if isinstance(value, list):
             if not value:
                 return None
@@ -473,6 +656,7 @@ class ClientEntrySerializer(serializers.Serializer):
                 first = first.strip()
                 return first if first else None
             return None
+
         if isinstance(value, dict):
             for k in ("url", "path", "name", "filename"):
                 v = value.get(k)
@@ -480,6 +664,7 @@ class ClientEntrySerializer(serializers.Serializer):
                     v = v.strip()
                     return v if v else None
             return None
+
         return None
 
 
@@ -500,49 +685,53 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
-    # -------------------------------------------------------
-    #  Save client attachment files from multipart request.FILES
-    # -------------------------------------------------------
-    def _save_client_attachment_files(self, uin_number, client_entries):
-        """
-        Accept nested client attachment uploads via multipart keys like:
-          - client_0_attachment
-          - client_1_attachment
-        Save to drone_attachments/<uin>/<filename> and write the RELATIVE PATH into JSON.
-        """
+    # IMPORTANT: parse multipart "client" JSON string -> list
+    def to_internal_value(self, data):
+        client_val = data.get("client", None)
+        if isinstance(client_val, str):
+            try:
+                parsed = json.loads(client_val)
+                data = data.copy()
+                data["client"] = parsed
+            except Exception:
+                pass
+        return super().to_internal_value(data)
+
+    # Save client attachment files from multipart request.FILES
+    def _save_client_attachment_files(self, parent_uin, client_entries):
         request = self.context.get("request")
         if not request or not hasattr(request, "FILES"):
-            return client_entries
+            return client_entries or []
 
-        if not client_entries:
-            return client_entries
-
+        client_entries = client_entries or []
         updated = []
+
         for idx, entry in enumerate(client_entries):
-            entry = dict(entry)
+            entry = dict(entry or {})
+
+            uin = entry.get("uin_number") or parent_uin
+            if not uin:
+                updated.append(entry)
+                continue
 
             f = request.FILES.get(f"client_{idx}_attachment")
             if f:
                 filename = get_valid_filename(f.name)
-                save_path = f"drone_attachments/{uin_number}/{filename}"
+                save_path = f"drone_attachments/{uin}/{filename}"
                 saved_path = default_storage.save(save_path, f)
-                entry["attachment"] = saved_path  #  store relative path
+                entry["attachment"] = saved_path  # relative path
 
             updated.append(entry)
 
         return updated
 
-    # -------------------------------------------------------
-    # Create / Update
-    # -------------------------------------------------------
     def create(self, validated_data):
         validated_data.pop("registered", None)
 
-        client_entries = validated_data.pop("client_details", [])
-        uin_number = validated_data.get("uin_number")
+        client_entries = validated_data.pop("client_details", []) or []
+        parent_uin = validated_data.get("uin_number")
 
-        #  save nested client file uploads (if any)
-        client_entries = self._save_client_attachment_files(uin_number, client_entries)
+        client_entries = self._save_client_attachment_files(parent_uin, client_entries)
         validated_data["client_details"] = client_entries
 
         validated_data["registered"] = False
@@ -551,37 +740,51 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         if "client_details" in validated_data:
             client_entries = validated_data.get("client_details") or []
-            uin_number = validated_data.get("uin_number", instance.uin_number)
+            parent_uin = validated_data.get("uin_number", instance.uin_number)
 
-            #  save nested client file uploads (if any)
-            client_entries = self._save_client_attachment_files(uin_number, client_entries)
+            client_entries = self._save_client_attachment_files(parent_uin, client_entries)
             validated_data["client_details"] = client_entries
 
         return super().update(instance, validated_data)
 
-    # -------------------------------------------------------
-    # Read: fallback only (DO NOT overwrite DB)
-    # -------------------------------------------------------
+    #  Read: convert relative client attachment -> full URL + add c_ keys
     def to_representation(self, instance):
         data = super().to_representation(instance)
 
         parent_drone_type = data.get("drone_type")
-        parent_attachment_url = data.get("attachment")  # this is URL for FileField
+        request = self.context.get("request")
+        media_url = getattr(settings, "MEDIA_URL", "/media/")
 
         client_entries = data.get("client") or []
-        enriched = []
+        transformed = []
 
         for entry in client_entries:
-            entry = dict(entry)
+            entry = dict(entry or {})
 
+            # keep your drone_type fallback logic
             if not entry.get("drone_type"):
                 entry["drone_type"] = parent_drone_type
 
-            #  only fallback for DISPLAY if client attachment is missing
-            if not entry.get("attachment") and parent_attachment_url:
-                entry["attachment"] = parent_attachment_url
+            # convert stored relative path -> URL
+            att = entry.get("attachment")
+            if att and isinstance(att, str) and not att.startswith("http"):
+                rel = att.lstrip("/")
+                url = f"{media_url.rstrip('/')}/{rel}"
+                entry["attachment"] = request.build_absolute_uri(url) if request else url
 
-            enriched.append(entry)
+            #  output with c_ keys
+            transformed.append({
+                "c_model_name": entry.get("model_name"),
+                "c_drone_type": entry.get("drone_type"),
+                "c_uin_number": entry.get("uin_number"),
+                "c_drone_serial_number": entry.get("drone_serial_number"),
+                "c_flight_controller_serial_number": entry.get("flight_controller_serial_number"),
+                "c_remote_controller": entry.get("remote_controller"),
+                "c_battery_charger_serial_number": entry.get("battery_charger_serial_number"),
+                "c_battery_serial_number_1": entry.get("battery_serial_number_1"),
+                "c_battery_serial_number_2": entry.get("battery_serial_number_2"),
+                "c_attachment": entry.get("attachment"),
+            })
 
-        data["client"] = enriched
+        data["client"] = transformed
         return data
