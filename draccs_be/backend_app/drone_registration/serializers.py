@@ -618,6 +618,7 @@
 #         return data
 
 
+
 import json
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -627,6 +628,9 @@ from .models import DroneRegistration
 
 
 class ClientEntrySerializer(serializers.Serializer):
+    # -----------------------
+    # DB (canonical) keys
+    # -----------------------
     model_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     drone_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     uin_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -639,6 +643,47 @@ class ClientEntrySerializer(serializers.Serializer):
 
     # Accept string / {} / [] / null from frontend
     attachment = serializers.JSONField(required=False, allow_null=True)
+
+    # -----------------------
+    # INPUT aliases (c_ keys)
+    # write_only so they don't appear twice on output
+    # -----------------------
+    c_model_name = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
+    c_drone_type = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
+    c_uin_number = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
+    c_drone_serial_number = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
+    c_flight_controller_serial_number = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
+    c_remote_controller = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
+    c_battery_charger_serial_number = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
+    c_battery_serial_number_1 = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
+    c_battery_serial_number_2 = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
+    c_attachment = serializers.JSONField(required=False, allow_null=True, write_only=True)
+
+    def to_internal_value(self, data):
+        """
+        Accept PATCH/POST client entries using c_* keys, and map them to normal keys
+        before validation and saving into JSONField.
+        """
+        if isinstance(data, dict):
+            data = data.copy()
+            mapping = {
+                "c_model_name": "model_name",
+                "c_drone_type": "drone_type",
+                "c_uin_number": "uin_number",
+                "c_drone_serial_number": "drone_serial_number",
+                "c_flight_controller_serial_number": "flight_controller_serial_number",
+                "c_remote_controller": "remote_controller",
+                "c_battery_charger_serial_number": "battery_charger_serial_number",
+                "c_battery_serial_number_1": "battery_serial_number_1",
+                "c_battery_serial_number_2": "battery_serial_number_2",
+                "c_attachment": "attachment",
+            }
+
+            for src, dst in mapping.items():
+                if src in data and (dst not in data or data.get(dst) in (None, "", {}, [])):
+                    data[dst] = data.get(src)
+
+        return super().to_internal_value(data)
 
     def validate_attachment(self, value):
         if value in ({}, [], "", None):
@@ -747,7 +792,7 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
 
-    #  Read: convert relative client attachment -> full URL + add c_ keys
+    # Read: keep top-level as normal keys; client[] returned as c_* keys
     def to_representation(self, instance):
         data = super().to_representation(instance)
 
@@ -761,7 +806,7 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         for entry in client_entries:
             entry = dict(entry or {})
 
-            # keep your drone_type fallback logic
+            # optional fallback
             if not entry.get("drone_type"):
                 entry["drone_type"] = parent_drone_type
 
@@ -772,7 +817,6 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
                 url = f"{media_url.rstrip('/')}/{rel}"
                 entry["attachment"] = request.build_absolute_uri(url) if request else url
 
-            #  output with c_ keys
             transformed.append({
                 "c_model_name": entry.get("model_name"),
                 "c_drone_type": entry.get("drone_type"),
