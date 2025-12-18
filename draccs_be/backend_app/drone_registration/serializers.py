@@ -617,8 +617,7 @@
 #         data["client"] = enriched
 #         return data
 
-
-
+# serializers.py
 import json
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -628,9 +627,7 @@ from .models import DroneRegistration
 
 
 class ClientEntrySerializer(serializers.Serializer):
-    # -----------------------
-    # DB (canonical) keys
-    # -----------------------
+    # Canonical keys stored inside JSONField
     model_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     drone_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     uin_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -641,51 +638,11 @@ class ClientEntrySerializer(serializers.Serializer):
     battery_serial_number_1 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     battery_serial_number_2 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
-    # Accept string / {} / [] / null from frontend
+    # store string path in JSON (recommended), but accept junk from frontend too
     attachment = serializers.JSONField(required=False, allow_null=True)
 
-    # -----------------------
-    # INPUT aliases (c_ keys)
-    # write_only so they don't appear twice on output
-    # -----------------------
-    c_model_name = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
-    c_drone_type = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
-    c_uin_number = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
-    c_drone_serial_number = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
-    c_flight_controller_serial_number = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
-    c_remote_controller = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
-    c_battery_charger_serial_number = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
-    c_battery_serial_number_1 = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
-    c_battery_serial_number_2 = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
-    c_attachment = serializers.JSONField(required=False, allow_null=True, write_only=True)
-
-    def to_internal_value(self, data):
-        """
-        Accept PATCH/POST client entries using c_* keys, and map them to normal keys
-        before validation and saving into JSONField.
-        """
-        if isinstance(data, dict):
-            data = data.copy()
-            mapping = {
-                "c_model_name": "model_name",
-                "c_drone_type": "drone_type",
-                "c_uin_number": "uin_number",
-                "c_drone_serial_number": "drone_serial_number",
-                "c_flight_controller_serial_number": "flight_controller_serial_number",
-                "c_remote_controller": "remote_controller",
-                "c_battery_charger_serial_number": "battery_charger_serial_number",
-                "c_battery_serial_number_1": "battery_serial_number_1",
-                "c_battery_serial_number_2": "battery_serial_number_2",
-                "c_attachment": "attachment",
-            }
-
-            for src, dst in mapping.items():
-                if src in data and (dst not in data or data.get(dst) in (None, "", {}, [])):
-                    data[dst] = data.get(src)
-
-        return super().to_internal_value(data)
-
     def validate_attachment(self, value):
+        # normalize empty-ish values into None
         if value in ({}, [], "", None):
             return None
 
@@ -714,36 +671,100 @@ class ClientEntrySerializer(serializers.Serializer):
 
 
 class DroneRegistrationSerializer(serializers.ModelSerializer):
-    client = ClientEntrySerializer(many=True, source="client_details", required=False, allow_null=True)
+    # DB field is client_details (JSONField). API field is "client".
+    client = ClientEntrySerializer(
+        many=True, source="client_details", required=False, allow_null=True
+    )
 
     class Meta:
         model = DroneRegistration
         fields = [
-            "id", "model_name", "drone_type", "manufacturer",
-            "uin_number", "drone_serial_number", "drone_id",
-            "flight_controller_serial_number", "remote_controller",
-            "battery_charger_serial_number", "battery_serial_number_1", "battery_serial_number_2",
-            "attachment", "image",
-            "registered", "remarks", "is_active",
-            "created_at", "updated_at",
+            "id",
+            "model_name",
+            "drone_type",
+            "manufacturer",
+            "uin_number",
+            "drone_serial_number",
+            "drone_id",
+            "flight_controller_serial_number",
+            "remote_controller",
+            "battery_charger_serial_number",
+            "battery_serial_number_1",
+            "battery_serial_number_2",
+            "attachment",
+            "image",
+            "registered",
+            "remarks",
+            "is_active",
+            "created_at",
+            "updated_at",
             "client",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
-    # IMPORTANT: parse multipart "client" JSON string -> list
+    # -------------------------------------------------------
+    # Parse client (multipart) + map c_* -> canonical keys
+    # -------------------------------------------------------
     def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, "copy") else dict(data)
+
         client_val = data.get("client", None)
+
+        # multipart/form-data: client arrives as JSON string
         if isinstance(client_val, str):
             try:
-                parsed = json.loads(client_val)
-                data = data.copy()
-                data["client"] = parsed
+                client_val = json.loads(client_val)
             except Exception:
-                pass
+                client_val = None
+
+        # normalize dict -> list
+        if isinstance(client_val, dict):
+            client_val = [client_val]
+
+        # Map c_* -> canonical for WRITE
+        if isinstance(client_val, list):
+            mapped = []
+            for e in client_val:
+                e = dict(e or {})
+                mapped.append(
+                    {
+                        "model_name": e.get("model_name") or e.get("c_model_name"),
+                        "drone_type": e.get("drone_type") or e.get("c_drone_type"),
+                        "uin_number": e.get("uin_number") or e.get("c_uin_number"),
+                        "drone_serial_number": e.get("drone_serial_number")
+                        or e.get("c_drone_serial_number"),
+                        "flight_controller_serial_number": e.get(
+                            "flight_controller_serial_number"
+                        )
+                        or e.get("c_flight_controller_serial_number"),
+                        "remote_controller": e.get("remote_controller")
+                        or e.get("c_remote_controller"),
+                        "battery_charger_serial_number": e.get(
+                            "battery_charger_serial_number"
+                        )
+                        or e.get("c_battery_charger_serial_number"),
+                        "battery_serial_number_1": e.get("battery_serial_number_1")
+                        or e.get("c_battery_serial_number_1"),
+                        "battery_serial_number_2": e.get("battery_serial_number_2")
+                        or e.get("c_battery_serial_number_2"),
+                        "attachment": e.get("attachment") or e.get("c_attachment"),
+                    }
+                )
+            data["client"] = mapped
+
         return super().to_internal_value(data)
 
-    # Save client attachment files from multipart request.FILES
+    # -------------------------------------------------------
+    # Save nested client attachment files
+    # -------------------------------------------------------
     def _save_client_attachment_files(self, parent_uin, client_entries):
+        """
+        Supports:
+          - client_0_attachment, client_1_attachment, ... (recommended)
+          - c_attachment (single quick upload for client[0])
+        Saves under: drone_attachments/<uin>/<filename>
+        Stores RELATIVE PATH in JSON: drone_attachments/<uin>/<file>
+        """
         request = self.context.get("request")
         if not request or not hasattr(request, "FILES"):
             return client_entries or []
@@ -753,23 +774,28 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
 
         for idx, entry in enumerate(client_entries):
             entry = dict(entry or {})
-
             uin = entry.get("uin_number") or parent_uin
-            if not uin:
-                updated.append(entry)
-                continue
 
+            # preferred per-index key
             f = request.FILES.get(f"client_{idx}_attachment")
-            if f:
+
+            # fallback: single key for first client
+            if not f and idx == 0:
+                f = request.FILES.get("c_attachment")
+
+            if f and uin:
                 filename = get_valid_filename(f.name)
                 save_path = f"drone_attachments/{uin}/{filename}"
                 saved_path = default_storage.save(save_path, f)
-                entry["attachment"] = saved_path  # relative path
+                entry["attachment"] = saved_path  # relative path in JSON
 
             updated.append(entry)
 
         return updated
 
+    # -------------------------------------------------------
+    # Create / Update
+    # -------------------------------------------------------
     def create(self, validated_data):
         validated_data.pop("registered", None)
 
@@ -783,6 +809,22 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
+        request = self.context.get("request")
+
+        # If file is sent but no client provided, DO NOT overwrite existing clients.
+        # Instead: update the first client entry if it exists, else create one.
+        if (
+            "client_details" not in validated_data
+            and request
+            and hasattr(request, "FILES")
+            and request.FILES.get("c_attachment")
+        ):
+            existing = instance.client_details or []
+            if isinstance(existing, list) and len(existing) > 0:
+                validated_data["client_details"] = existing
+            else:
+                validated_data["client_details"] = [{}]
+
         if "client_details" in validated_data:
             client_entries = validated_data.get("client_details") or []
             parent_uin = validated_data.get("uin_number", instance.uin_number)
@@ -792,13 +834,15 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
 
-    # Read: keep top-level as normal keys; client[] returned as c_* keys
+    # -------------------------------------------------------
+    # Output: return client[] as c_* keys ONLY
+    # -------------------------------------------------------
     def to_representation(self, instance):
         data = super().to_representation(instance)
 
-        parent_drone_type = data.get("drone_type")
         request = self.context.get("request")
         media_url = getattr(settings, "MEDIA_URL", "/media/")
+        parent_drone_type = data.get("drone_type")
 
         client_entries = data.get("client") or []
         transformed = []
@@ -806,29 +850,35 @@ class DroneRegistrationSerializer(serializers.ModelSerializer):
         for entry in client_entries:
             entry = dict(entry or {})
 
-            # optional fallback
+            # optional drone_type fallback for display
             if not entry.get("drone_type"):
                 entry["drone_type"] = parent_drone_type
 
-            # convert stored relative path -> URL
+            # convert stored relative path -> full URL (do not rewrite DB)
             att = entry.get("attachment")
             if att and isinstance(att, str) and not att.startswith("http"):
                 rel = att.lstrip("/")
                 url = f"{media_url.rstrip('/')}/{rel}"
                 entry["attachment"] = request.build_absolute_uri(url) if request else url
 
-            transformed.append({
-                "c_model_name": entry.get("model_name"),
-                "c_drone_type": entry.get("drone_type"),
-                "c_uin_number": entry.get("uin_number"),
-                "c_drone_serial_number": entry.get("drone_serial_number"),
-                "c_flight_controller_serial_number": entry.get("flight_controller_serial_number"),
-                "c_remote_controller": entry.get("remote_controller"),
-                "c_battery_charger_serial_number": entry.get("battery_charger_serial_number"),
-                "c_battery_serial_number_1": entry.get("battery_serial_number_1"),
-                "c_battery_serial_number_2": entry.get("battery_serial_number_2"),
-                "c_attachment": entry.get("attachment"),
-            })
+            transformed.append(
+                {
+                    "c_model_name": entry.get("model_name"),
+                    "c_drone_type": entry.get("drone_type"),
+                    "c_uin_number": entry.get("uin_number"),
+                    "c_drone_serial_number": entry.get("drone_serial_number"),
+                    "c_flight_controller_serial_number": entry.get(
+                        "flight_controller_serial_number"
+                    ),
+                    "c_remote_controller": entry.get("remote_controller"),
+                    "c_battery_charger_serial_number": entry.get(
+                        "battery_charger_serial_number"
+                    ),
+                    "c_battery_serial_number_1": entry.get("battery_serial_number_1"),
+                    "c_battery_serial_number_2": entry.get("battery_serial_number_2"),
+                    "c_attachment": entry.get("attachment"),
+                }
+            )
 
         data["client"] = transformed
         return data
