@@ -44,7 +44,7 @@ INSTALLED_APPS = [
     'backend_app.orderform.apps.OrderformConfig', 
     'backend_app.client.apps.ClientConfig',
     'backend_app.drone_image',
-    # 'backend_app.online_support',
+    'backend_app.online_support',
 ]
 
 MIDDLEWARE = [

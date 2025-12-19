@@ -29,7 +29,7 @@ urlpatterns = [
     path("api/", include("backend_app.orderform.urls")),           # /api/orders/, /api/order-delivery-info/...
     path("api/", include("backend_app.client.urls")),
     path("api/", include("backend_app.drone_image.urls")),
-    # path("api/support/", include("backend_app.online_support.urls")),
+    path("api/support/", include("backend_app.online_support.urls")),
 ]
 
 # Serve uploaded files (like PDFs) in development
