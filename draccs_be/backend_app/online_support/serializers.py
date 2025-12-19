@@ -40,16 +40,12 @@
 
 
 
-
-
 from rest_framework import serializers
 from .models import SupportThread, SupportMessage
 
 
 class SupportMessageSerializer(serializers.ModelSerializer):
-    sender_name = serializers.CharField(
-        source="sender.username", read_only=True
-    )
+    sender_name = serializers.CharField(source="sender.username", read_only=True)
 
     class Meta:
         model = SupportMessage
@@ -66,12 +62,8 @@ class SupportMessageSerializer(serializers.ModelSerializer):
 
 
 class SupportThreadSerializer(serializers.ModelSerializer):
-    created_by_name = serializers.CharField(
-        source="created_by.username", read_only=True
-    )
-    assigned_to_name = serializers.CharField(
-        source="assigned_to.username", read_only=True
-    )
+    created_by_name = serializers.CharField(source="created_by.username", read_only=True)
+    assigned_to_name = serializers.CharField(source="assigned_to.username", read_only=True)
 
     class Meta:
         model = SupportThread
@@ -87,9 +79,4 @@ class SupportThreadSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = [
-            "id",
-            "created_by",
-            "created_at",
-            "updated_at",
-        ]
+        read_only_fields = ["id", "created_by", "created_at", "updated_at"]
