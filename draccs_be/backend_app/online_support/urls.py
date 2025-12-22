@@ -8,9 +8,10 @@
 
 
 from rest_framework.routers import DefaultRouter
-from .views import SupportThreadViewSet
+from .views import SupportThreadViewSet, SupportMessageViewSet
 
 router = DefaultRouter()
 router.register(r"threads", SupportThreadViewSet, basename="support-thread")
+router.register(r"messages", SupportMessageViewSet, basename="support-message")
 
 urlpatterns = router.urls

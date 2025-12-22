@@ -37,9 +37,6 @@
 #             "sender": msg.sender.username,
 #             "created_at": msg.created_at
 #         }
-
-
-
 from rest_framework import serializers
 from .models import SupportThread, SupportMessage
 
@@ -58,7 +55,7 @@ class SupportMessageSerializer(serializers.ModelSerializer):
             "attachment",
             "created_at",
         ]
-        read_only_fields = ["id", "sender", "created_at"]
+        read_only_fields = ["id", "sender", "created_at", "sender_name"]
 
 
 class SupportThreadSerializer(serializers.ModelSerializer):
@@ -69,6 +66,7 @@ class SupportThreadSerializer(serializers.ModelSerializer):
         model = SupportThread
         fields = [
             "id",
+            "ticket_id",          #  include ticket id
             "subject",
             "status",
             "drone",
@@ -79,4 +77,4 @@ class SupportThreadSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_by", "created_at", "updated_at"]
+        read_only_fields = ["id", "ticket_id", "created_by", "created_at", "updated_at"]
