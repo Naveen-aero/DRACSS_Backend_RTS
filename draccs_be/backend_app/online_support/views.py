@@ -52,71 +52,71 @@
 
 #         return Response(SupportMessageSerializer(msg).data, status=201)
 
-
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.permissions import AllowAny
+
 from .models import SupportThread, SupportMessage
 from .serializers import SupportThreadSerializer, SupportMessageSerializer
 
 
-class IsOwnerOrStaff(permissions.BasePermission):
-    def has_object_permission(self, request, view, obj):
-        return request.user.is_staff or obj.created_by == request.user
-
-
 class SupportThreadViewSet(viewsets.ModelViewSet):
     serializer_class = SupportThreadSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwnerOrStaff]
+    permission_classes = [AllowAny]  # 🔥 no auth required
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff:
+
+        if user.is_authenticated and user.is_staff:
             return SupportThread.objects.all()
-        return SupportThread.objects.filter(created_by=user)
+        elif user.is_authenticated:
+            return SupportThread.objects.filter(created_by=user)
+        else:
+            return SupportThread.objects.none()  # anonymous sees nothing
 
     def perform_create(self, serializer):
-        # Automatically assign the logged-in user as ticket creator
-        serializer.save(created_by=self.request.user)
+        # Save created_by if user is logged in, else NULL
+        serializer.save(created_by=self.request.user if self.request.user.is_authenticated else None)
 
-    # -----------------------------
-    # Messages under ticket
-    # -----------------------------
-    @action(detail=True, methods=["get", "post"], url_path="messages",
-            parser_classes=[MultiPartParser, FormParser, JSONParser])
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path="messages",
+        permission_classes=[AllowAny],
+        parser_classes=[MultiPartParser, FormParser, JSONParser]
+    )
     def messages(self, request, pk=None):
         thread = self.get_object()
 
-        if request.method == "GET":
-            msgs = thread.messages.all()
-            return Response(SupportMessageSerializer(msgs, many=True).data)
-
         if thread.status == "CLOSED":
-            return Response({"detail": "Ticket is closed."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Ticket is closed"}, status=400)
 
-        # POST new message
+        if request.method == "GET":
+            messages = thread.messages.all()
+            return Response(SupportMessageSerializer(messages, many=True).data)
+
+        # POST message (allow anonymous)
         msg = SupportMessage.objects.create(
             thread=thread,
-            sender=request.user,
+            sender=request.user if request.user.is_authenticated else None,
             message=request.data.get("message", ""),
             attachment=request.data.get("attachment")
         )
 
-        # Mark ticket in progress if it was OPEN
-        if thread.status == "OPEN":
-            thread.status = "IN_PROGRESS"
-            thread.save(update_fields=["status", "updated_at"])
+        thread.save(update_fields=["updated_at"])
+        return Response(SupportMessageSerializer(msg).data, status=201)
 
-        return Response(SupportMessageSerializer(msg).data, status=status.HTTP_201_CREATED)
-
-    # -----------------------------
-    # Close ticket
-    # -----------------------------
-    @action(detail=True, methods=["post"])
-    def close(self, request, pk=None):
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="close",
+        permission_classes=[permissions.IsAdminUser]
+    )
+    def close_ticket(self, request, pk=None):
         thread = self.get_object()
         thread.status = "CLOSED"
-        thread.save(update_fields=["status", "updated_at"])
+        thread.save(update_fields=["status"])
         return Response({"status": "Ticket closed"})

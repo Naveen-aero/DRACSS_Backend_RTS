@@ -60,12 +60,12 @@
 #     class Meta:
 #         ordering = ["created_at"]
 
+
 from django.db import models
 from django.conf import settings
 
 
 def support_attachment_path(instance, filename):
-    # Store attachments under ticket ID folder
     return f"support/ticket_{instance.thread_id}/{filename}"
 
 
@@ -78,9 +78,11 @@ class SupportThread(models.Model):
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,  # allow user deletion without breaking
+        null=True,                  #  allow NULL for anonymous
+        blank=True,
         related_name="created_tickets"
-    )
+    ) 
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -112,9 +114,18 @@ class SupportMessage(models.Model):
         on_delete=models.CASCADE,
         related_name="messages"
     )
-    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,  # allow anonymous messages   
+        null=True,
+        blank=True
+    )
     message = models.TextField()
-    attachment = models.FileField(upload_to=support_attachment_path, null=True, blank=True)
+    attachment = models.FileField(
+        upload_to=support_attachment_path,
+        null=True,
+        blank=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
