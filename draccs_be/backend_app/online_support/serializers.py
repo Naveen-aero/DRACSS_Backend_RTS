@@ -65,13 +65,13 @@ class SupportMessageSerializer(serializers.ModelSerializer):
 
 
 class SupportThreadSerializer(serializers.ModelSerializer):
-    # ✅ READ: show created_by username
+    #  READ: show created_by username
     created_by_name = serializers.CharField(source="created_by.username", read_only=True)
 
-    # ✅ READ: return drone_serial_number from the related drone FK
+    #  READ: return drone_serial_number from the related drone FK
     drone_serial_number = serializers.SerializerMethodField(read_only=True)
 
-    # ✅ WRITE: accept drone serial number from client (but hide from response)
+    #  WRITE: accept drone serial number from client (but hide from response)
     drone_serial_number_input = serializers.CharField(write_only=True, required=True)
 
     class Meta:
