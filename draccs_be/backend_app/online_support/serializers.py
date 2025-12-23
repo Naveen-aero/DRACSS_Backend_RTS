@@ -38,12 +38,12 @@
 #             "created_at": msg.created_at
 #         }
 
+
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from .models import SupportThread, SupportMessage
 
-# If your app label is different, change "drone_registration" below
 DroneRegistration = apps.get_model("drone_registration", "DroneRegistration")
 User = get_user_model()
 
@@ -103,15 +103,10 @@ class SupportThreadListSerializer(serializers.ModelSerializer):
 class SupportThreadSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source="created_by.username", read_only=True)
 
-    #  READ from FK
     drone_serial_number = serializers.SerializerMethodField(read_only=True)
-
-    #  WRITE from client (POST/PATCH)
     drone_serial_number_input = serializers.CharField(write_only=True, required=True)
 
-    #  include messages in detail output
-    # IMPORTANT: if your SupportMessage FK has related_name="messages", keep this as-is.
-    # DRF error you got means DO NOT set source="messages" when field name is already "messages".
+    #  detail view includes messages[] (reverse name is "messages")
     messages = SupportMessageBriefSerializer(many=True, read_only=True)
 
     class Meta:
@@ -147,7 +142,7 @@ class SupportThreadSerializer(serializers.ModelSerializer):
     def to_internal_value(self, data):
         """
         Client sends: drone_serial_number
-        We map it into drone_serial_number_input internally.
+        Map it into drone_serial_number_input internally.
         """
         data = data.copy()
         if "drone_serial_number" in data and "drone_serial_number_input" not in data:
@@ -179,21 +174,14 @@ class SupportThreadSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context.get("request")
 
-        # remove input field
         validated_data.pop("drone_serial_number_input", None)
-
-        # set FK
         validated_data["drone"] = getattr(self, "_resolved_drone", None)
-
-        # set created_by server-side
         validated_data["created_by"] = self._get_created_by_user(request)
 
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        # allow changing drone via serial number if PATCH/PUT provides it
         if "drone_serial_number_input" in validated_data:
             validated_data.pop("drone_serial_number_input", None)
             instance.drone = getattr(self, "_resolved_drone", instance.drone)
-
         return super().update(instance, validated_data)

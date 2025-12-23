@@ -65,7 +65,6 @@ from django.conf import settings
 
 
 def support_attachment_path(instance, filename):
-    # store under ticket id folder
     tid = instance.thread.ticket_id if instance.thread and instance.thread.ticket_id else f"thread_{instance.thread_id}"
     return f"support/{tid}/{filename}"
 
@@ -77,7 +76,6 @@ class SupportThread(models.Model):
         ("CLOSED", "Closed"),
     ]
 
-    # ✅ Ticket ID visible to user (unique)
     ticket_id = models.CharField(max_length=32, unique=True, blank=True, db_index=True)
 
     created_by = models.ForeignKey(
