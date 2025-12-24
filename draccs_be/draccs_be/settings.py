@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework.authtoken',  
     'backend_app.accounts', 
     'corsheaders', 
     'backend_app.drone_registration',
@@ -147,4 +148,10 @@ CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "rest_framework.schemas.openapi.AutoSchema",
+
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework.authentication.SessionAuthentication",  # browser/admin login
+        "rest_framework.authentication.BasicAuthentication",    # optional (Postman basic)
+        "rest_framework.authentication.TokenAuthentication",    # Token <token>
+    ),
 }
