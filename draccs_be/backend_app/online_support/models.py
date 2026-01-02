@@ -62,7 +62,7 @@
 
 from django.db import models
 from django.conf import settings
-
+from django.utils import timezone
 
 def support_attachment_path(instance, filename):
     tid = instance.thread.ticket_id if instance.thread and instance.thread.ticket_id else f"thread_{instance.thread_id}"
@@ -106,34 +106,29 @@ class SupportThread(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        ordering = ["-updated_at"]
+    def save(self, *args, **kwargs):
+        if not self.ticket_id:
+            today = timezone.now().strftime("%Y%m%d")  # YYYYMMDD
+            # Count tickets created today to get incremental number
+            count_today = SupportThread.objects.filter(
+                created_at__date=timezone.now().date()
+            ).count() + 1
+            self.ticket_id = f"TKT-{today}{str(count_today).zfill(2)}"  # TKT-YYYYMMDD01
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.ticket_id or self.id} - {self.status}"
 
 
 class SupportMessage(models.Model):
-    thread = models.ForeignKey(
-        SupportThread,
-        on_delete=models.CASCADE,
-        related_name="messages"
-    )
-
-    sender = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True
-    )
-
+    thread = models.ForeignKey(SupportThread, on_delete=models.CASCADE, related_name="messages")
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    
     message = models.TextField()
-
-    attachment = models.FileField(
-        upload_to=support_attachment_path,
-        null=True,
-        blank=True
-    )
+    attachment = models.FileField(upload_to=support_attachment_path, null=True, blank=True)
+    
+    # New field to store the hardcoded sender_name
+    sender_name = models.CharField(max_length=50, blank=True)  
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -142,3 +137,4 @@ class SupportMessage(models.Model):
 
     def __str__(self):
         return f"Message #{self.id} in Ticket #{self.thread_id}"
+

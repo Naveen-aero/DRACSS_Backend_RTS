@@ -52,16 +52,17 @@ User = get_user_model()
 # Messages
 # -----------------------
 class SupportMessageSerializer(serializers.ModelSerializer):
-    sender_name = serializers.CharField(source="sender.username", read_only=True)
-
     class Meta:
         model = SupportMessage
-        fields = ["id", "thread", "sender", "sender_name", "message", "attachment", "created_at"]
-        read_only_fields = ["id", "sender", "sender_name", "created_at"]
+        fields = ["id", "thread", "message", "attachment", "sender_name", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+   
+  
 
 
 class SupportMessageBriefSerializer(serializers.ModelSerializer):
-    sender_name = serializers.CharField(source="sender.username", read_only=True)
+    sender_name = serializers.CharField(read_only=True)
 
     class Meta:
         model = SupportMessage
@@ -70,7 +71,7 @@ class SupportMessageBriefSerializer(serializers.ModelSerializer):
 
 
 # -----------------------
-# Threads (LIST)
+# Threads
 # -----------------------
 class SupportThreadListSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source="created_by.username", read_only=True)
@@ -97,16 +98,10 @@ class SupportThreadListSerializer(serializers.ModelSerializer):
         return getattr(obj.drone, "drone_serial_number", None)
 
 
-# -----------------------
-# Threads (DETAIL + CREATE)
-# -----------------------
 class SupportThreadSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source="created_by.username", read_only=True)
-
     drone_serial_number = serializers.SerializerMethodField(read_only=True)
     drone_serial_number_input = serializers.CharField(write_only=True, required=True)
-
-    #  detail view includes messages[] (reverse name is "messages")
     messages = SupportMessageBriefSerializer(many=True, read_only=True)
 
     class Meta:
@@ -125,13 +120,8 @@ class SupportThreadSerializer(serializers.ModelSerializer):
             "messages",
         ]
         read_only_fields = [
-            "id",
-            "ticket_id",
-            "drone_serial_number",
-            "created_by_name",
-            "created_at",
-            "updated_at",
-            "messages",
+            "id", "ticket_id", "drone_serial_number", "created_by_name",
+            "created_at", "updated_at", "messages"
         ]
 
     def get_drone_serial_number(self, obj):
@@ -140,10 +130,6 @@ class SupportThreadSerializer(serializers.ModelSerializer):
         return getattr(obj.drone, "drone_serial_number", None)
 
     def to_internal_value(self, data):
-        """
-        Client sends: drone_serial_number
-        Map it into drone_serial_number_input internally.
-        """
         data = data.copy()
         if "drone_serial_number" in data and "drone_serial_number_input" not in data:
             data["drone_serial_number_input"] = data.get("drone_serial_number")
@@ -153,30 +139,24 @@ class SupportThreadSerializer(serializers.ModelSerializer):
         value = (value or "").strip()
         if not value:
             raise serializers.ValidationError("drone_serial_number is required")
-
         try:
             drone = DroneRegistration.objects.get(drone_serial_number=value)
         except DroneRegistration.DoesNotExist:
             raise serializers.ValidationError("No drone found with this drone_serial_number")
-
         self._resolved_drone = drone
         return value
 
-    def _get_created_by_user(self, request):
-        user = getattr(request, "user", None)
-        if user and user.is_authenticated:
-            return user
-        try:
-            return User.objects.get(username="support_guest")
-        except User.DoesNotExist:
-            raise serializers.ValidationError("Guest user 'support_guest' not found.")
-
     def create(self, validated_data):
         request = self.context.get("request")
-
         validated_data.pop("drone_serial_number_input", None)
         validated_data["drone"] = getattr(self, "_resolved_drone", None)
-        validated_data["created_by"] = self._get_created_by_user(request)
+
+        if request.user and request.user.is_authenticated:
+            validated_data["created_by"] = request.user
+        else:
+            guest_name = request.data.get("created_by_name", "support_guest")
+            user, _ = User.objects.get_or_create(username=guest_name, defaults={"is_active": False})
+            validated_data["created_by"] = user
 
         return super().create(validated_data)
 

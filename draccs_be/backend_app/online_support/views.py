@@ -53,43 +53,51 @@
 #         return Response(SupportMessageSerializer(msg).data, status=201)
 
 from collections import OrderedDict
-
 from django.contrib.auth import get_user_model
 from rest_framework import viewsets, status
 from rest_framework.permissions import BasePermission, SAFE_METHODS, AllowAny
 from rest_framework.response import Response
-
+from rest_framework.permissions import IsAuthenticated
 from .models import SupportThread, SupportMessage
 from .serializers import (
     SupportThreadSerializer,
     SupportThreadListSerializer,
     SupportMessageSerializer,
 )
+from rest_framework.permissions import AllowAny
+from django.utils import timezone
+from django.db import transaction
 
 User = get_user_model()
 
 
-#  Permission: allow read to all, but only STAFF can delete threads/messages
-# (If you want any logged-in user to delete, tell me — change is 1 line.)
+# -----------------------------
+# Permissions
+# -----------------------------
 class IsStaffWriteReadOnly(BasePermission):
+    """
+    Allow read to all; only authenticated staff can modify (POST/PUT/DELETE)
+    """
     def has_permission(self, request, view):
         if request.method in SAFE_METHODS:
             return True
-        return bool(request.user and request.user.is_authenticated and request.user.is_staff)
+        return bool(request.user and request.user.is_authenticated)
 
 
+# -----------------------------
+# Thread ViewSet
+# -----------------------------
 class SupportThreadViewSet(viewsets.ModelViewSet):
-    #  Keeps GET open, protects DELETE/PATCH/PUT/POST
-    permission_classes = [IsStaffWriteReadOnly]
+    queryset = SupportThread.objects.select_related("drone", "created_by", "assigned_to").order_by("-created_at")
+ 
+    def get_permissions(self):
+        if self.action in ["list", "retrieve", "create", "partial_update", "update"]:
+            return [AllowAny()] 
+        return [IsStaffWriteReadOnly()]
 
-    def get_queryset(self):
-        qs = SupportThread.objects.select_related("drone", "created_by", "assigned_to").order_by("-created_at")
-        if getattr(self, "action", None) == "retrieve":
-            qs = qs.prefetch_related("messages")
-        return qs
 
     def get_serializer_class(self):
-        if getattr(self, "action", None) == "list":
+        if self.action == "list":
             return SupportThreadListSerializer
         return SupportThreadSerializer
 
@@ -98,7 +106,6 @@ class SupportThreadViewSet(viewsets.ModelViewSet):
         ctx["request"] = self.request
         return ctx
 
-    #  Optional: clean response after delete
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         ticket = instance.ticket_id
@@ -107,84 +114,114 @@ class SupportThreadViewSet(viewsets.ModelViewSet):
             {"detail": f"Thread deleted successfully", "ticket_id": ticket},
             status=status.HTTP_200_OK
         )
+    
+    def perform_create(self, serializer):
+        today = timezone.now().strftime("%Y%m%d")
+        prefix = f"TKT-{today}"
+
+        with transaction.atomic():
+            last_thread = (
+                SupportThread.objects
+                .filter(ticket_id__startswith=prefix)
+                .order_by("-ticket_id")
+                .first()
+            )
+
+            if last_thread:
+                last_number = int(last_thread.ticket_id[-2:])
+                next_number = last_number + 1
+            else:
+                next_number = 1
+
+            ticket_id = f"{prefix}{next_number:02d}"
+
+            serializer.save(ticket_id=ticket_id)
 
 
+
+# -----------------------------
+# Message ViewSet
+# -----------------------------
 class SupportMessageViewSet(viewsets.ModelViewSet):
+    queryset = SupportMessage.objects.all()
     serializer_class = SupportMessageSerializer
 
-    #  Keep your existing behavior: allow guest POST
-    # BUT: delete of messages should be restricted (staff)
     def get_permissions(self):
-        # anyone can GET + POST (your requirement)
         if self.action in ["list", "retrieve", "create"]:
             return [AllowAny()]
-        # only staff can update/delete messages
+
+        if self.action in ["partial_update", "update", "destroy"]:
+            return [IsAuthenticated()]  # ✅ allow PATCH & DELETE
+
         return [IsStaffWriteReadOnly()]
 
+
     def get_queryset(self):
-        return SupportMessage.objects.select_related("sender", "thread").order_by("thread_id", "created_at")
+        thread_id = self.request.query_params.get("thread")
+        if thread_id:
+            return self.queryset.filter(thread_id=thread_id).select_related("thread", "sender").order_by("created_at")
+        # ✅ return all messages if thread_id is not specified
+        return self.queryset.select_related("thread", "sender").order_by("created_at")
+
+
 
     def list(self, request, *args, **kwargs):
-        """
-        GET /api/messages/ grouped by thread.
-        - Top-level "id" is sequential per thread group: 1,2,3...
-        - Each reply has "id" sequential inside its thread: 1,2,3...
-        """
-        qs = self.filter_queryset(self.get_queryset())
-
+        thread_id = request.query_params.get("thread")
+        qs = self.get_queryset()
+        
+        if not thread_id:
+            # Return messages of latest thread
+            latest_thread = SupportThread.objects.order_by("-created_at").first()
+            if latest_thread:
+                qs = qs.filter(thread_id=latest_thread.id)
+        
         grouped = OrderedDict()
-
-        # Group messages by thread
         for msg in qs:
             tid = msg.thread_id
-
             if tid not in grouped:
-                grouped[tid] = {
-                    "thread": tid,
-                    "attachment": None,
-                    "replies": []
-                }
-
+                grouped[tid] = {"id": tid, "attachment": None, "replies": []}
             grouped[tid]["replies"].append({
-                "sender_name": msg.sender.username if msg.sender else None,
+                "id": msg.id,
+                "ui_id": None,
+                "sender_name": msg.sender_name or (msg.sender.username if msg.sender else "support_guest"),
                 "message": msg.message,
                 "attachment": msg.attachment.url if msg.attachment else None,
                 "created_at": msg.created_at,
             })
+        return Response(list(grouped.values()))
 
-        # Build final response with sequential ids
-        response = []
-        group_id = 1
 
-        for tid, group in grouped.items():
-            for i, reply in enumerate(group["replies"], start=1):
-                reply["id"] = i
-
-            response.append({
-                "id": group_id,
-                "thread": group["thread"],
-                "attachment": group["attachment"],
-                "replies": group["replies"],
-            })
-            group_id += 1
-
-        return Response(response)
 
     def perform_create(self, serializer):
-        """
-        If logged in: sender = request.user
-        If not logged in: sender = support_guest (or None)
-        """
-        user = getattr(self.request, "user", None)
+        request = self.request
+        sender_type = request.data.get("sender_type", "").lower()
+        thread_id = request.data.get("thread")
 
-        if user and user.is_authenticated:
-            serializer.save(sender=user)
-            return
+        thread = None
+        if thread_id:
+            try:
+                thread = SupportThread.objects.get(id=thread_id)
+            except SupportThread.DoesNotExist:
+                pass
 
-        guest = User.objects.filter(username="support_guest").first()
-        serializer.save(sender=guest)
+        # ✅ BD Team message
+        if sender_type == "bdteam":
+            serializer.save(
+                sender=request.user if request.user.is_authenticated else None,
+                sender_name="BDTeam"   # 🔒 fixed value
+            )
+        else:
+            sender_name = (
+                request.user.username if request.user.is_authenticated
+                else (thread.created_by.username if thread and thread.created_by else "support_guest")
+            )
+            serializer.save(
+                sender=request.user if request.user.is_authenticated else None,
+                sender_name=sender_name
+            )
 
-    #  Optional: clean response after delete
+
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         mid = instance.id
