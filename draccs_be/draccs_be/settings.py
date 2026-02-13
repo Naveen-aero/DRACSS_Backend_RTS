@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'backend_app.client.apps.ClientConfig',
     'backend_app.drone_image',
     'backend_app.online_support',
+    'backend_app.return_to_service',
 ]
 
 MIDDLEWARE = [
@@ -89,7 +90,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'dracss',
         'USER': 'root',              
-        'PASSWORD': 'Lokicu.14',              
+        'PASSWORD': 'mysql',              
         'HOST': 'localhost',
         'PORT': '3306',
         'OPTIONS': {

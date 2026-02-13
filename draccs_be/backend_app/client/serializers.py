@@ -17,7 +17,7 @@ class ClientSerializer(serializers.ModelSerializer):
             "email",
             "location",
             "id_proof",
-            "bank_name",
+            "bank_name",      
             "account_number",
             "ifsc_code",
             "branch_name",

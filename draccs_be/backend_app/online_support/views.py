@@ -151,7 +151,7 @@ class SupportMessageViewSet(viewsets.ModelViewSet):
             return [AllowAny()]
 
         if self.action in ["partial_update", "update", "destroy"]:
-            return [IsAuthenticated()]  # ✅ allow PATCH & DELETE
+            return [IsAuthenticated()]  #  allow PATCH & DELETE
 
         return [IsStaffWriteReadOnly()]
 
@@ -160,7 +160,7 @@ class SupportMessageViewSet(viewsets.ModelViewSet):
         thread_id = self.request.query_params.get("thread")
         if thread_id:
             return self.queryset.filter(thread_id=thread_id).select_related("thread", "sender").order_by("created_at")
-        # ✅ return all messages if thread_id is not specified
+        #  return all messages if thread_id is not specified
         return self.queryset.select_related("thread", "sender").order_by("created_at")
 
 
@@ -204,11 +204,11 @@ class SupportMessageViewSet(viewsets.ModelViewSet):
             except SupportThread.DoesNotExist:
                 pass
 
-        # ✅ BD Team message
+        #  BD Team message
         if sender_type == "bdteam":
             serializer.save(
                 sender=request.user if request.user.is_authenticated else None,
-                sender_name="BDTeam"   # 🔒 fixed value
+                sender_name="BDTeam"   #  fixed value
             )
         else:
             sender_name = (
