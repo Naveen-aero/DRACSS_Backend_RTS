@@ -18,11 +18,31 @@ class ReturnToBaseServiceRequestViewSet(viewsets.ModelViewSet):
 
     # Useful filtering/search for admin UI
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+
     search_fields = [
+        # Base fields
         "uas_model",
         "flight_controller",
         "serial_number",
         "affected_subsystem_component",
         "reported_by",
+
+        #  NEW: Intrack fields
+        "intrack_tracking_id",
+        "intrack_courier",
+        "intrack_status",
+
+        #  NEW: Outtrack fields
+        "outtrack_tracking_id",
+        "outtrack_courier",
+        "outtrack_status",
     ]
-    ordering_fields = ["created_at", "date_of_occurrence", "reported_date"]
+
+    ordering_fields = [
+        "created_at",
+        "updated_at",            #  NEW (useful for tracking updates)
+        "date_of_occurrence",
+        "reported_date",
+        "intrack_shipping_date", #  optional but helpful
+        "outtrack_shipping_date" #  optional but helpful
+    ]
