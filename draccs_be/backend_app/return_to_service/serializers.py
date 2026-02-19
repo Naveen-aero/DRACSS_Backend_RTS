@@ -1,8 +1,19 @@
 from rest_framework import serializers
-from .models import ReturnToBaseServiceRequest
+from .models import ReturnToBaseServiceRequest, RTBServiceRequestComponent
+
+
+class RTBServiceRequestComponentSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = RTBServiceRequestComponent
+        fields = ["id", "component_type", "quantity", "remarks"]
 
 
 class ReturnToBaseServiceRequestSerializer(serializers.ModelSerializer):
+    #  NEW: nested components inside SAME endpoint
+    components = RTBServiceRequestComponentSerializer(many=True, required=False)
+
     class Meta:
         model = ReturnToBaseServiceRequest
         fields = "__all__"
@@ -61,3 +72,33 @@ class ReturnToBaseServiceRequestSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+    #  NEW: supports POST with components[]
+    def create(self, validated_data):
+        components_data = validated_data.pop("components", [])
+        rtb = ReturnToBaseServiceRequest.objects.create(**validated_data)
+
+        for item in components_data:
+            RTBServiceRequestComponent.objects.create(rtb_request=rtb, **item)
+
+        return rtb
+
+    # NEW: supports PUT/PATCH with components[]
+    # Rule:
+    # - if components key is present -> replace all components
+    # - if components key not present -> do nothing to components
+    def update(self, instance, validated_data):
+        components_data = validated_data.pop("components", None)
+
+        # update parent normally (existing behavior)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # update components only if provided
+        if components_data is not None:
+            instance.components.all().delete()
+            for item in components_data:
+                RTBServiceRequestComponent.objects.create(rtb_request=instance, **item)
+
+        return instance

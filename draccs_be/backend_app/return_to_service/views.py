@@ -13,7 +13,10 @@ class ReturnToBaseServiceRequestViewSet(viewsets.ModelViewSet):
       PATCH  /api/rtb-service-requests/{id}/
       DELETE /api/rtb-service-requests/{id}/
     """
-    queryset = ReturnToBaseServiceRequest.objects.all()
+
+    # ONLY CHANGE: prefetch_related("components") for nested list
+    queryset = ReturnToBaseServiceRequest.objects.all().prefetch_related("components")
+
     serializer_class = ReturnToBaseServiceRequestSerializer
 
     # Useful filtering/search for admin UI
@@ -40,9 +43,9 @@ class ReturnToBaseServiceRequestViewSet(viewsets.ModelViewSet):
 
     ordering_fields = [
         "created_at",
-        "updated_at",            #  NEW (useful for tracking updates)
+        "updated_at",
         "date_of_occurrence",
         "reported_date",
-        "intrack_shipping_date", #  optional but helpful
-        "outtrack_shipping_date" #  optional but helpful
+        "intrack_shipping_date",
+        "outtrack_shipping_date",
     ]
