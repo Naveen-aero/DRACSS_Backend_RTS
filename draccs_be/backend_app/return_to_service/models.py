@@ -42,7 +42,7 @@ class ReturnToBaseServiceRequest(models.Model):
 
     quotation_sent_at = models.DateTimeField(blank=True, null=True)
     quotation_action_at = models.DateTimeField(blank=True, null=True)
-
+                
     quotation_total = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -58,6 +58,7 @@ class ReturnToBaseServiceRequest(models.Model):
 
     SERVICE_STATUS_CHOICES = [
     ("PENDING", "Pending"),
+    ("SHIPPED","Shipped"),
     ("ASSIGNED", "Assigned"),
     ("QUOTATION_SENT", "Quotation Sent"),
     ("APPROVED", "Approved"),
