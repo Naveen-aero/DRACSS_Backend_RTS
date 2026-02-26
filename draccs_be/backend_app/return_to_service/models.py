@@ -22,6 +22,11 @@ class ReturnToBaseServiceRequest(models.Model):
     operator_actions_taken = models.TextField()  # "Pheumatic cleaning  "
     immediate_consequence_flight_outcome = models.TextField()
     corrective_actions_taken = models.TextField()  # "Inspected for any blockage"
+    employee_id = models.CharField(
+        max_length=20,
+        null=True, 
+        blank=True
+    )
 
     reported_by = models.CharField(max_length=150)  # "Beautus(Client)"
     reported_date = models.DateField()
